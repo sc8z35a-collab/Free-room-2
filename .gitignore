@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+.pio/
+.vscode/
+.DS_Store
+simulation/reports/host_verify_bin

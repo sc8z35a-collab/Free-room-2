@@ -1,0 +1,169 @@
+<?xml version="1.0"?>
+<robot name="rnv1_humanoid">
+  <link name="torso">
+    <inertial>
+      <origin xyz="0.001 0 0.022" rpy="0 0 0"/>
+      <mass value="0.20219"/>
+      <inertia ixx="0.0001857" ixy="0" ixz="0" iyy="0.0001270" iyz="0" izz="0.0001570"/>
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0.026" rpy="0 0 0"/>
+      <geometry><box size="0.054 0.080 0.068"/></geometry>
+    </collision>
+  </link>
+
+  <link name="neck_gimbal">
+    <inertial><origin xyz="0 0 0.009"/><mass value="0.01266"/>
+      <inertia ixx="0.0000010" ixy="0" ixz="0" iyy="0.0000010" iyz="0" izz="0.0000010"/>
+    </inertial>
+  </link>
+  <joint name="head_yaw" type="revolute">
+    <parent link="torso"/><child link="neck_gimbal"/>
+    <origin xyz="0 0 0.064"/><axis xyz="0 0 1"/>
+    <limit lower="-1.309" upper="1.309" effort="0.155" velocity="10.0"/>
+    <dynamics damping="0.012" friction="0.002"/>
+  </joint>
+
+  <link name="head">
+    <inertial><origin xyz="0.003 0 0.013"/><mass value="0.02398"/>
+      <inertia ixx="0.0000102" ixy="0" ixz="0" iyy="0.0000074" iyz="0" izz="0.0000106"/>
+    </inertial>
+    <collision><origin xyz="0 0 0.013"/><geometry><box size="0.044 0.058 0.042"/></geometry></collision>
+  </link>
+  <joint name="head_pitch" type="revolute">
+    <parent link="neck_gimbal"/><child link="head"/>
+    <origin xyz="0 0 0.016"/><axis xyz="0 1 0"/>
+    <limit lower="-0.524" upper="0.611" effort="0.155" velocity="10.0"/>
+    <dynamics damping="0.012" friction="0.002"/>
+  </joint>
+
+  <link name="arm_L">
+    <inertial><origin xyz="0.004 0 -0.032"/><mass value="0.00741"/>
+      <inertia ixx="0.0000033" ixy="0" ixz="0" iyy="0.0000034" iyz="0" izz="0.0000010"/>
+    </inertial>
+    <collision><origin xyz="0.005 0 -0.034"/><geometry><box size="0.012 0.010 0.068"/></geometry></collision>
+  </link>
+  <joint name="l_shoulder" type="revolute">
+    <parent link="torso"/><child link="arm_L"/>
+    <origin xyz="0 0.046 0.046"/><axis xyz="0 1 0"/>
+    <limit lower="-1.658" upper="2.618" effort="0.206" velocity="11.0"/>
+    <dynamics damping="0.019" friction="0.003"/>
+  </joint>
+
+  <link name="arm_R">
+    <inertial><origin xyz="0.004 0 -0.032"/><mass value="0.00741"/>
+      <inertia ixx="0.0000033" ixy="0" ixz="0" iyy="0.0000034" iyz="0" izz="0.0000010"/>
+    </inertial>
+    <collision><origin xyz="0.005 0 -0.034"/><geometry><box size="0.012 0.010 0.068"/></geometry></collision>
+  </link>
+  <joint name="r_shoulder" type="revolute">
+    <parent link="torso"/><child link="arm_R"/>
+    <origin xyz="0 -0.046 0.046"/><axis xyz="0 1 0"/>
+    <limit lower="-1.658" upper="2.618" effort="0.206" velocity="11.0"/>
+    <dynamics damping="0.019" friction="0.003"/>
+  </joint>
+
+  <!-- LEFT LEG -->
+  <link name="hip_clevis_L">
+    <inertial><origin xyz="0 0.002 -0.010"/><mass value="0.01907"/>
+      <inertia ixx="0.0000017" ixy="0" ixz="0" iyy="0.0000018" iyz="0" izz="0.0000017"/>
+    </inertial>
+  </link>
+  <joint name="l_hip_roll" type="revolute">
+    <parent link="torso"/><child link="hip_clevis_L"/>
+    <origin xyz="0 0.023 0"/><axis xyz="1 0 0"/>
+    <limit lower="-0.524" upper="0.611" effort="0.206" velocity="11.0"/>
+    <dynamics damping="0.019" friction="0.003"/>
+  </joint>
+
+  <link name="leg_L">
+    <inertial><origin xyz="0 0 -0.056"/><mass value="0.03596"/>
+      <inertia ixx="0.0000249" ixy="0" ixz="0" iyy="0.0000243" iyz="0" izz="0.0000028"/>
+    </inertial>
+  </link>
+  <joint name="l_hip_pitch" type="revolute">
+    <parent link="hip_clevis_L"/><child link="leg_L"/>
+    <origin xyz="0 0.003 -0.018"/><axis xyz="0 1 0"/>
+    <limit lower="-0.960" upper="0.960" effort="0.206" velocity="11.0"/>
+    <dynamics damping="0.019" friction="0.003"/>
+  </joint>
+
+  <link name="ankle_L">
+    <inertial><origin xyz="0 0 0.002"/><mass value="0.01799"/>
+      <inertia ixx="0.0000016" ixy="0" ixz="0" iyy="0.0000015" iyz="0" izz="0.0000016"/>
+    </inertial>
+  </link>
+  <joint name="l_ankle_pitch" type="revolute">
+    <parent link="leg_L"/><child link="ankle_L"/>
+    <origin xyz="0 0 -0.088"/><axis xyz="0 1 0"/>
+    <limit lower="-0.785" upper="0.785" effort="0.206" velocity="11.0"/>
+    <dynamics damping="0.019" friction="0.003"/>
+  </joint>
+
+  <link name="foot_L">
+    <inertial><origin xyz="0.003 0 -0.013"/><mass value="0.01568"/>
+      <inertia ixx="0.0000031" ixy="0" ixz="0" iyy="0.0000071" iyz="0" izz="0.0000095"/>
+    </inertial>
+    <collision><origin xyz="0.003 0 -0.015"/><geometry><box size="0.048 0.046 0.006"/></geometry></collision>
+    <collision><origin xyz="0.032 0 -0.0135" rpy="0 -0.14 0"/><geometry><box size="0.016 0.042 0.006"/></geometry></collision>
+    <collision><origin xyz="-0.025 0 -0.0135" rpy="0 0.14 0"/><geometry><box size="0.014 0.042 0.006"/></geometry></collision>
+  </link>
+  <joint name="l_ankle_roll" type="revolute">
+    <parent link="ankle_L"/><child link="foot_L"/>
+    <origin xyz="0 0 0"/><axis xyz="1 0 0"/>
+    <limit lower="-0.611" upper="0.611" effort="0.206" velocity="11.0"/>
+    <dynamics damping="0.019" friction="0.003"/>
+  </joint>
+
+  <!-- RIGHT LEG -->
+  <link name="hip_clevis_R">
+    <inertial><origin xyz="0 -0.002 -0.010"/><mass value="0.01907"/>
+      <inertia ixx="0.0000017" ixy="0" ixz="0" iyy="0.0000018" iyz="0" izz="0.0000017"/>
+    </inertial>
+  </link>
+  <joint name="r_hip_roll" type="revolute">
+    <parent link="torso"/><child link="hip_clevis_R"/>
+    <origin xyz="0 -0.023 0"/><axis xyz="1 0 0"/>
+    <limit lower="-0.611" upper="0.524" effort="0.206" velocity="11.0"/>
+    <dynamics damping="0.019" friction="0.003"/>
+  </joint>
+
+  <link name="leg_R">
+    <inertial><origin xyz="0 0 -0.056"/><mass value="0.03596"/>
+      <inertia ixx="0.0000249" ixy="0" ixz="0" iyy="0.0000243" iyz="0" izz="0.0000028"/>
+    </inertial>
+  </link>
+  <joint name="r_hip_pitch" type="revolute">
+    <parent link="hip_clevis_R"/><child link="leg_R"/>
+    <origin xyz="0 -0.003 -0.018"/><axis xyz="0 1 0"/>
+    <limit lower="-0.960" upper="0.960" effort="0.206" velocity="11.0"/>
+    <dynamics damping="0.019" friction="0.003"/>
+  </joint>
+
+  <link name="ankle_R">
+    <inertial><origin xyz="0 0 0.002"/><mass value="0.01799"/>
+      <inertia ixx="0.0000016" ixy="0" ixz="0" iyy="0.0000015" iyz="0" izz="0.0000016"/>
+    </inertial>
+  </link>
+  <joint name="r_ankle_pitch" type="revolute">
+    <parent link="leg_R"/><child link="ankle_R"/>
+    <origin xyz="0 0 -0.088"/><axis xyz="0 1 0"/>
+    <limit lower="-0.785" upper="0.785" effort="0.206" velocity="11.0"/>
+    <dynamics damping="0.019" friction="0.003"/>
+  </joint>
+
+  <link name="foot_R">
+    <inertial><origin xyz="0.003 0 -0.013"/><mass value="0.01568"/>
+      <inertia ixx="0.0000031" ixy="0" ixz="0" iyy="0.0000071" iyz="0" izz="0.0000095"/>
+    </inertial>
+    <collision><origin xyz="0.003 0 -0.015"/><geometry><box size="0.048 0.046 0.006"/></geometry></collision>
+    <collision><origin xyz="0.032 0 -0.0135" rpy="0 -0.14 0"/><geometry><box size="0.016 0.042 0.006"/></geometry></collision>
+    <collision><origin xyz="-0.025 0 -0.0135" rpy="0 0.14 0"/><geometry><box size="0.014 0.042 0.006"/></geometry></collision>
+  </link>
+  <joint name="r_ankle_roll" type="revolute">
+    <parent link="ankle_R"/><child link="foot_R"/>
+    <origin xyz="0 0 0"/><axis xyz="1 0 0"/>
+    <limit lower="-0.611" upper="0.611" effort="0.206" velocity="11.0"/>
+    <dynamics damping="0.019" friction="0.003"/>
+  </joint>
+</robot>
