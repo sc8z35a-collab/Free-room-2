@@ -1,0 +1,411 @@
+/* RNV1 3D CAD Viewer — Pure Solid White (#FFFFFF) Studio Aesthetic
+ * Zero visible text outside the collapsible specification drawer (#spec-drawer).
+ * Responsive for Desktop PC and Mobile Landscape Fullscreen with safe-area support.
+ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background-color: #ffffff;
+  color: #111418;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  overscroll-behavior: none;
+  user-select: none;
+}
+
+#cad-stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+#cad-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  touch-action: none;
+  cursor: grab;
+}
+
+#cad-canvas:active {
+  cursor: grabbing;
+}
+
+/* Minimalist Floating Icon-Only Buttons (Pure Monochrome Studio Glass on White) */
+.icon-btn {
+  appearance: none;
+  border: 1px solid rgba(17, 20, 24, 0.10);
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #1f242c;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.055), 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+              background-color 0.16s ease,
+              color 0.16s ease,
+              border-color 0.16s ease,
+              box-shadow 0.16s ease;
+}
+
+.icon-btn svg {
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+}
+
+.icon-btn-sm {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+
+.icon-btn-sm svg {
+  width: 18px;
+  height: 18px;
+}
+
+.icon-btn:hover {
+  background: #f5f7fa;
+  border-color: rgba(17, 20, 24, 0.22);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.icon-btn:active {
+  transform: scale(0.94);
+}
+
+.icon-btn.is-active {
+  background: #14181f;
+  color: #ffffff;
+  border-color: #14181f;
+  box-shadow: 0 4px 14px rgba(20, 24, 31, 0.22);
+}
+
+/* Play/Pause SVG visibility */
+#btn-play .ico-play { display: block; }
+#btn-play .ico-pause { display: none; }
+#btn-play.is-active .ico-play { display: none; }
+#btn-play.is-active .ico-pause { display: block; }
+
+/* Top-Right Action Pair (Fullscreen + Explanation Info) */
+.cad-top-actions {
+  position: fixed;
+  top: max(18px, env(safe-area-inset-top));
+  right: max(18px, env(safe-area-inset-right));
+  display: flex;
+  gap: 10px;
+  z-index: 20;
+}
+
+/* Bottom-Center Floating Primary Dock (Desktop PC & Portrait) */
+.cad-dock {
+  position: fixed;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(17, 20, 24, 0.09);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.04);
+  z-index: 20;
+}
+
+.cad-dock .icon-btn {
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
+}
+
+.cad-dock .icon-btn:hover {
+  background: rgba(17, 20, 24, 0.06);
+  transform: none;
+  box-shadow: none;
+}
+
+.cad-dock .icon-btn.is-active {
+  background: #14181f;
+  color: #ffffff;
+}
+
+/* Explode Assembly Slider Rail (Left-Bottom on PC, Left-Center Vertical on Mobile Landscape) */
+.cad-explode-rail {
+  position: fixed;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 6px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(17, 20, 24, 0.09);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.06);
+  z-index: 20;
+}
+
+.cad-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 116px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(17, 20, 24, 0.14);
+  outline: none;
+  cursor: pointer;
+}
+
+.cad-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #14181f;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.cad-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.cad-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #14181f;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+ * MOBILE LANDSCAPE FULLSCREEN LAYOUT (e.g., 844x390, 915x412, 667x375)
+ * Docks icons along side edges so 100% of vertical screen height displays CAD!
+ * ========================================================================== */
+@media (orientation: landscape) and (max-height: 540px) {
+  .cad-top-actions {
+    top: max(10px, env(safe-area-inset-top));
+    left: max(10px, env(safe-area-inset-left));
+    right: auto;
+    gap: 7px;
+  }
+
+  .cad-dock {
+    bottom: auto;
+    left: auto;
+    top: 50%;
+    right: max(10px, env(safe-area-inset-right));
+    transform: translateY(-50%);
+    flex-direction: column;
+    padding: 5px;
+    gap: 5px;
+    border-radius: 15px;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  .icon-btn svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .cad-explode-rail {
+    left: max(10px, env(safe-area-inset-left));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    padding: 5px 10px 5px 5px;
+    gap: 8px;
+  }
+
+  .cad-slider {
+    width: 88px;
+  }
+
+  .spec-drawer {
+    width: min(460px, 78vw);
+  }
+}
+
+/* Mobile Portrait Fallback */
+@media (max-width: 640px) and (orientation: portrait) {
+  .cad-explode-rail {
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px);
+  }
+  .cad-dock {
+    bottom: max(14px, env(safe-area-inset-bottom));
+    gap: 4px;
+    padding: 5px;
+  }
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* ==========================================================================
+ * COLLAPSIBLE EXPLANATION DRAWER (ONLY place where text appears)
+ * ========================================================================== */
+.spec-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(540px, 92vw);
+  height: 100vh;
+  height: 100dvh;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-left: 1px solid rgba(17, 20, 24, 0.10);
+  box-shadow: -12px 0 36px rgba(0, 0, 0, 0.08);
+  transform: translateX(104%);
+  transition: transform 0.30s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  user-select: text;
+}
+
+.spec-drawer.is-open {
+  transform: translateX(0);
+}
+
+.spec-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: max(16px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) 14px 20px;
+  border-bottom: 1px solid rgba(17, 20, 24, 0.08);
+  background: #ffffff;
+}
+
+.spec-drawer-head h1 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #111418;
+  line-height: 1.35;
+}
+
+.spec-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 18px 20px max(28px, env(safe-area-inset-bottom)) 20px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #2c333d;
+}
+
+.spec-section {
+  margin-bottom: 22px;
+}
+
+.spec-section h2 {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #111418;
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(17, 20, 24, 0.09);
+}
+
+.spec-section p {
+  margin-bottom: 10px;
+}
+
+.spec-section code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  background: #f2f4f7;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #0f172a;
+}
+
+.spec-list {
+  padding-left: 18px;
+}
+
+.spec-list li {
+  margin-bottom: 6px;
+}
+
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  margin-top: 6px;
+}
+
+.spec-table th, .spec-table td {
+  text-align: left;
+  padding: 6px 7px;
+  border-bottom: 1px solid rgba(17, 20, 24, 0.08);
+  vertical-align: top;
+}
+
+.spec-table th {
+  font-weight: 700;
+  color: #111418;
+  background: #f8f9fb;
+}
+
+.spec-table td.num, .spec-table th.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.spec-table tr.total-row td {
+  font-weight: 700;
+  background: #f3f6fa;
+  color: #0b1220;
+  border-top: 1.5px solid #14181f;
+}
+
+.pass-tag {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e7f6ec;
+  color: #0f6b35;
+}

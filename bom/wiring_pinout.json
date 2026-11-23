@@ -1,0 +1,77 @@
+{
+  "mcu": "Seeed Studio XIAO ESP32S3 Sense (ESP32-S3R8)",
+  "logic_voltage_v": 3.3,
+  "power_rails": {
+    "VBAT_2S": {
+      "nominal_v": 7.4,
+      "range_v": [6.4, 8.4],
+      "max_discharge_a": 8.0,
+      "source": "2x 14500 800mAh 10C Li-ion via 2S 5A BMS + Main Slide Switch"
+    },
+    "V_SERVO_5V6": {
+      "nominal_v": 5.6,
+      "max_current_a": 5.0,
+      "regulator": "Mini560 5A Synchronous Buck Converter (adjusted to 5.6V)",
+      "decoupling": "1000uF 10V Low-ESR Electrolytic + 100nF Ceramic at PCA9685 V+",
+      "loads": ["PCA9685 V+ rail -> 10x MG90S + 2x SG90"]
+    },
+    "V_LOGIC_5V0": {
+      "nominal_v": 5.0,
+      "max_current_a": 2.0,
+      "regulator": "Mini-360 2A Buck Converter (isolated from servo rail droop)",
+      "protection": "1N5819 Schottky Diode (anode to Mini-360 5V, cathode to XIAO 5V pin) prevents USB-C backfeed",
+      "loads": ["XIAO ESP32S3 Sense 5V (via 1N5819 -> 4.68V)", "MAX98357A VIN (5.0V direct)"]
+    },
+    "V_3V3": {
+      "nominal_v": 3.3,
+      "max_current_ma": 700,
+      "source": "XIAO ESP32S3 Sense onboard 3.3V LDO",
+      "loads": ["PCA9685 VCC logic", "MPU-6050 VCC", "VL53L0X VCC", "4.7kOhm I2C pull-ups"]
+    }
+  },
+  "gpio_allocation": {
+    "internal_b2b_camera": {
+      "pins": [10, 11, 12, 13, 14, 15, 16, 17, 18, 38, 39, 40, 47, 48],
+      "peripheral": "DVP Camera (OV5640 / OV3660 / OV2640)"
+    },
+    "internal_b2b_pdm_mic": {
+      "pins": [41, 42],
+      "peripheral": "I2S_NUM_0 RX PDM Digital Microphone (CLK=GPIO42, DATA=GPIO41)"
+    },
+    "header_pins": [
+      {"xiao_pin": "D0", "gpio": 1, "function": "I2S_NUM_1 BCLK", "target": "MAX98357A BCLK", "strapping": false},
+      {"xiao_pin": "D1", "gpio": 2, "function": "I2S_NUM_1 LRC", "target": "MAX98357A LRC/WS", "strapping": false},
+      {"xiao_pin": "D2", "gpio": 3, "function": "VL53L0X XSHUT (optional reset)", "target": "VL53L0X XSHUT", "strapping": true, "note": "JTAG strapping pin; high-Z input on VL53L0X XSHUT"},
+      {"xiao_pin": "D3", "gpio": 4, "function": "I2S_NUM_1 DOUT", "target": "MAX98357A DIN", "strapping": false},
+      {"xiao_pin": "D4", "gpio": 5, "function": "I2C_NUM_0 SDA (400kHz)", "target": "PCA9685 + MPU6050 + VL53L0X SDA", "strapping": false},
+      {"xiao_pin": "D5", "gpio": 6, "function": "I2C_NUM_0 SCL (400kHz)", "target": "PCA9685 + MPU6050 + VL53L0X SCL", "strapping": false},
+      {"xiao_pin": "D6", "gpio": 43, "function": "UART0 TX", "target": "Debug / Telemetry TX", "strapping": false},
+      {"xiao_pin": "D7", "gpio": 44, "function": "UART0 RX", "target": "Debug / Telemetry RX", "strapping": false},
+      {"xiao_pin": "D8", "gpio": 7, "function": "ADC1_CH6 VBAT_SENSE", "target": "100k/100k Divider from VBAT_2S (0-4.2V -> 0-2.8V w/ 200k/100k)", "strapping": false},
+      {"xiao_pin": "D9", "gpio": 8, "function": "PCA9685 OE# (Active-Low Emergency Stop)", "target": "PCA9685 OE pin (10k pull-up keeps servos disabled during boot!)", "strapping": false},
+      {"xiao_pin": "D10", "gpio": 9, "function": "MAX98357A SD_MODE", "target": "Speaker mute/unmute control (saves standby power)", "strapping": false}
+    ]
+  },
+  "i2c_bus": {
+    "frequency_hz": 400000,
+    "devices": [
+      {"name": "PCA9685", "address_hex": "0x40", "role": "16-ch 12-bit PWM servo driver"},
+      {"name": "MPU-6050", "address_hex": "0x68", "role": "6-axis IMU (AD0=GND)"},
+      {"name": "VL53L0X", "address_hex": "0x29", "role": "940nm Laser ToF spatial scanner"}
+    ]
+  },
+  "pca9685_channels": [
+    {"ch": 0,  "joint": "l_hip_roll",     "servo": "MG90S", "min_deg": -30, "max_deg": 35,  "neutral_us": 1500},
+    {"ch": 1,  "joint": "l_hip_pitch",    "servo": "MG90S", "min_deg": -55, "max_deg": 55,  "neutral_us": 1500},
+    {"ch": 2,  "joint": "l_ankle_pitch",  "servo": "MG90S", "min_deg": -45, "max_deg": 45,  "neutral_us": 1500},
+    {"ch": 3,  "joint": "l_ankle_roll",   "servo": "MG90S", "min_deg": -35, "max_deg": 35,  "neutral_us": 1500},
+    {"ch": 4,  "joint": "r_hip_roll",     "servo": "MG90S", "min_deg": -35, "max_deg": 30,  "neutral_us": 1500},
+    {"ch": 5,  "joint": "r_hip_pitch",    "servo": "MG90S", "min_deg": -55, "max_deg": 55,  "neutral_us": 1500},
+    {"ch": 6,  "joint": "r_ankle_pitch",  "servo": "MG90S", "min_deg": -45, "max_deg": 45,  "neutral_us": 1500},
+    {"ch": 7,  "joint": "r_ankle_roll",   "servo": "MG90S", "min_deg": -35, "max_deg": 35,  "neutral_us": 1500},
+    {"ch": 8,  "joint": "l_shoulder",     "servo": "MG90S", "min_deg": -95, "max_deg": 150, "neutral_us": 1500},
+    {"ch": 9,  "joint": "r_shoulder",     "servo": "MG90S", "min_deg": -95, "max_deg": 150, "neutral_us": 1500},
+    {"ch": 10, "joint": "head_yaw",       "servo": "SG90",  "min_deg": -75, "max_deg": 75,  "neutral_us": 1500},
+    {"ch": 11, "joint": "head_pitch",     "servo": "SG90",  "min_deg": -30, "max_deg": 35,  "neutral_us": 1500}
+  ]
+}

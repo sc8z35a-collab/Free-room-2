@@ -1,0 +1,199 @@
+{
+  "parts": [
+    {
+      "name": "torso_chassis",
+      "stl_file": "cad/stl/torso_chassis.stl",
+      "qty": 1,
+      "triangles": 4296,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        54.0,
+        82.8,
+        68.6
+      ],
+      "unit_volume_cm3": 37.134,
+      "unit_mass_g": 31.56,
+      "total_mass_g": 31.56
+    },
+    {
+      "name": "torso_back_cover",
+      "stl_file": "cad/stl/torso_back_cover.stl",
+      "qty": 1,
+      "triangles": 1216,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        6.0,
+        60.0,
+        44.0
+      ],
+      "unit_volume_cm3": 8.148,
+      "unit_mass_g": 6.93,
+      "total_mass_g": 6.93
+    },
+    {
+      "name": "head_shell",
+      "stl_file": "cad/stl/head_shell.stl",
+      "qty": 1,
+      "triangles": 2496,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        43.58,
+        60.6,
+        41.58
+      ],
+      "unit_volume_cm3": 15.061,
+      "unit_mass_g": 12.8,
+      "total_mass_g": 12.8
+    },
+    {
+      "name": "head_visor",
+      "stl_file": "cad/stl/head_visor.stl",
+      "qty": 1,
+      "triangles": 492,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        2.37,
+        42.74,
+        24.74
+      ],
+      "unit_volume_cm3": 2.207,
+      "unit_mass_g": 1.88,
+      "total_mass_g": 1.88
+    },
+    {
+      "name": "neck_gimbal",
+      "stl_file": "cad/stl/neck_gimbal.stl",
+      "qty": 1,
+      "triangles": 960,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        20.0,
+        24.5,
+        21.75
+      ],
+      "unit_volume_cm3": 3.596,
+      "unit_mass_g": 3.06,
+      "total_mass_g": 3.06
+    },
+    {
+      "name": "hip_clevis_left",
+      "stl_file": "cad/stl/hip_clevis_left.stl",
+      "qty": 1,
+      "triangles": 1152,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        29.2,
+        23.2,
+        33.5
+      ],
+      "unit_volume_cm3": 5.73,
+      "unit_mass_g": 4.87,
+      "total_mass_g": 4.87
+    },
+    {
+      "name": "hip_clevis_right",
+      "stl_file": "cad/stl/hip_clevis_right.stl",
+      "qty": 1,
+      "triangles": 1152,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        29.2,
+        23.2,
+        33.5
+      ],
+      "unit_volume_cm3": 5.73,
+      "unit_mass_g": 4.87,
+      "total_mass_g": 4.87
+    },
+    {
+      "name": "leg_link",
+      "stl_file": "cad/stl/leg_link.stl",
+      "qty": 2,
+      "triangles": 2336,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        22.25,
+        28.4,
+        101.25
+      ],
+      "unit_volume_cm3": 25.604,
+      "unit_mass_g": 21.76,
+      "total_mass_g": 43.53
+    },
+    {
+      "name": "ankle_clevis",
+      "stl_file": "cad/stl/ankle_clevis.stl",
+      "qty": 2,
+      "triangles": 1388,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        23.6,
+        28.2,
+        22.0
+      ],
+      "unit_volume_cm3": 4.462,
+      "unit_mass_g": 3.79,
+      "total_mass_g": 7.59
+    },
+    {
+      "name": "foot_sole",
+      "stl_file": "cad/stl/foot_sole.stl",
+      "qty": 2,
+      "triangles": 2558,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        72.0,
+        46.0,
+        24.3
+      ],
+      "unit_volume_cm3": 13.977,
+      "unit_mass_g": 11.88,
+      "total_mass_g": 23.76
+    },
+    {
+      "name": "arm_link_left",
+      "stl_file": "cad/stl/arm_link_left.stl",
+      "qty": 1,
+      "triangles": 1690,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        27.32,
+        10.08,
+        81.9
+      ],
+      "unit_volume_cm3": 7.782,
+      "unit_mass_g": 6.61,
+      "total_mass_g": 6.61
+    },
+    {
+      "name": "arm_link_right",
+      "stl_file": "cad/stl/arm_link_right.stl",
+      "qty": 1,
+      "triangles": 1690,
+      "watertight": true,
+      "fits_200mm_bed": true,
+      "extents_mm": [
+        27.32,
+        10.08,
+        81.9
+      ],
+      "unit_volume_cm3": 7.782,
+      "unit_mass_g": 6.61,
+      "total_mass_g": 6.61
+    }
+  ],
+  "total_printed_mass_g": 154.07,
+  "total_volume_cm3": 181.25,
+  "all_watertight": true
+}

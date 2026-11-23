@@ -1,0 +1,177 @@
+{
+  "project": "RNV1 (Robotic Neural Vector 1)",
+  "elapsed_s": 16.69,
+  "passed_suites": 12,
+  "total_suites": 12,
+  "all_100pct_passed": true,
+  "suites": [
+    {
+      "suite": "1_CAD_Printability_Watertightness",
+      "passed": true,
+      "metrics": {
+        "parts_verified": 12,
+        "all_watertight_manifold": true,
+        "all_fit_200mm_fdm_bed": true,
+        "total_printed_mass_g": 154.07,
+        "foot_inner_gap_mm": 6.0,
+        "arm_torso_clearance_mm": 2.96
+      }
+    },
+    {
+      "suite": "2_Kinematics_CoM_Stability_Workspace",
+      "passed": true,
+      "metrics": {
+        "com_xyz_mm": [
+          0.99,
+          0.0,
+          111.55
+        ],
+        "com_height_ratio": 0.469,
+        "tip_fwd_deg": 15.53,
+        "tip_back_deg": 13.12,
+        "tip_lat_double_deg": 23.71,
+        "tip_lat_single_deg": 11.65,
+        "max_swing_clearance_mm": 14.31,
+        "head_pan_rom_deg": 150.0,
+        "head_tilt_rom_deg": 65.0
+      }
+    },
+    {
+      "suite": "3_Structural_FEA_Stress_Buckling",
+      "passed": true,
+      "metrics": {
+        "impact_load_3g_N": 12.69,
+        "clevis_fork_vm_MPa": 2.54,
+        "clevis_fork_sf_Z": 8.67,
+        "pivot_boss_vm_MPa": 2.96,
+        "pivot_boss_sf_Z": 7.44,
+        "leg_column_sf_Z": 82.91,
+        "euler_buckling_sf": 1774.5,
+        "foot_sole_sf_XY": 11.53,
+        "foot_sole_sf_Z": 5.64,
+        "m2_bolt_shear_sf": 34.0,
+        "max_elastic_deflection_mm": 0.0782,
+        "min_safety_factor_weak_Z": 5.64
+      }
+    },
+    {
+      "suite": "4_MuJoCo_4_Locomotion_Push_Slope_DR30",
+      "passed": true,
+      "metrics": {
+        "walk_10s_dist_m": 0.6223,
+        "walk_10s_vx_mps": 0.0622,
+        "walk_10s_max_tilt_deg": 14.84,
+        "walk_10s_peak_torque_nm": 0.206,
+        "walk_10s_rms_torque_nm": 0.053,
+        "turn_left_6s_yaw_rad": 1.4633,
+        "turn_right_6s_yaw_rad": -0.7176,
+        "stand_5s_max_tilt_deg": 0.04,
+        "push_lateral_1.6N_survived": true,
+        "push_sagittal_1.8N_survived": true,
+        "slope_5deg_6s_dist_m": 0.2461,
+        "monte_carlo_30_survival_pct": 100.0,
+        "monte_carlo_mean_5s_dist_m": 0.311
+      }
+    },
+    {
+      "suite": "5_PyBullet_3_CrossEngine_Validation",
+      "passed": true,
+      "metrics": {
+        "pybullet_stand_4s_fell": false,
+        "pybullet_stand_4s_tilt_deg": 0.16,
+        "pybullet_walk_6s_fell": false,
+        "pybullet_walk_6s_dist_m": 0.5482,
+        "pybullet_walk_6s_tilt_deg": 11.48
+      }
+    },
+    {
+      "suite": "6_Electrical_Power_Brownout_Runtime",
+      "passed": true,
+      "metrics": {
+        "avg_walk_power_W": 11.52,
+        "avg_servo_current_A": 1.61,
+        "avg_battery_current_A": 1.56,
+        "peak_surge_battery_A": 4.48,
+        "peak_c_rate_of_10C_cell": 5.6,
+        "min_battery_voltage_30pctSoC_V": 6.11,
+        "min_servo_rail_transient_V": 5.25,
+        "min_xiao_5v_input_after_diode_V": 4.63,
+        "brownout_margin_above_3v65_V": 0.98,
+        "continuous_walk_runtime_min": 27.8
+      }
+    },
+    {
+      "suite": "7_Thermal_Equilibrium_30min_30C",
+      "passed": true,
+      "metrics": {
+        "ambient_C": 30.0,
+        "xiao_esp32s3_peak_C": 53.22,
+        "mg90s_servo_peak_C": 50.23,
+        "buck_converter_peak_C": 62.92,
+        "liion_battery_peak_C": 42.03,
+        "chassis_wall_peak_C": 48.1
+      }
+    },
+    {
+      "suite": "8_Spatial_ToF_Navigation_CliffSafety",
+      "passed": true,
+      "metrics": {
+        "reached_goal_2.55m": true,
+        "obstacle_collisions": 0,
+        "min_obstacle_clearance_m": 0.153,
+        "cliff_dropoff_detected": true
+      }
+    },
+    {
+      "suite": "9_Firmware_CPP_BitExact_EdgeBudget",
+      "passed": true,
+      "metrics": {
+        "gpp_strict_zero_warnings": true,
+        "python_cpp_max_abs_diff_rad": 1.6e-07,
+        "imu_filter_convergence_err_rad": 0.0,
+        "cpp_spatial_and_cliff_ok": true,
+        "offline_jp_speech_pcm_rms": 20547.0,
+        "nn_macs_per_step": 7168,
+        "nn_weights_flash_bytes": 29280,
+        "esp32s3_240mhz_est_latency_ms": 0.807,
+        "gpio_conflicts": 0,
+        "i2c_addresses_unique": true
+      }
+    },
+    {
+      "suite": "10_Acoustic_Speech_Intelligibility",
+      "passed": true,
+      "metrics": {
+        "speaker_voice_spl_1m_dB": 78.0,
+        "i2s_dma_jitter_buffer_ms": 96.0,
+        "pdm_mic_voice_to_servo_snr_dB": 18.0
+      }
+    },
+    {
+      "suite": "11_BOM_Sub10kJPY_Mass_Audit",
+      "passed": true,
+      "metrics": {
+        "total_domestic_jp_jpy": 9874,
+        "total_optimal_route_jpy": 8340,
+        "budget_limit_jpy": 10000,
+        "bom_mass_g": 426.47,
+        "mujoco_mass_g": 431.05,
+        "urdf_mass_g": 431.05,
+        "mujoco_urdf_mass_diff_pct": 0.0,
+        "bom_mujoco_mass_diff_pct": 1.06
+      }
+    },
+    {
+      "suite": "12_Colab_A100_Notebook_and_WebCAD_UI",
+      "passed": true,
+      "metrics": {
+        "colab_nb_valid_schema_and_ast": true,
+        "colab_a100_mjx_rnv1_configured": true,
+        "web_ui_js_syntax_ok": true,
+        "pure_white_ffffff_background": true,
+        "zero_text_outside_explanation_drawer": true,
+        "mobile_landscape_fullscreen_and_pc_responsive": true
+      }
+    }
+  ]
+}
