@@ -1101,8 +1101,12 @@ def build_cells_part2(seed_dict: dict) -> list:
     # Cell 5: Exact Bilateral-Equivariant Actor + 446K-Param bfloat16 Residual Critic + RMA Teacher/Student
     cell5_src = '''#@title 5. Exact Bilateral-Equivariant Actor (36->64->64->12 + CPG), 446K bfloat16 Critic & RMA Teacher/Student { display-mode: "form" }
 import json
+jax.config.update("jax_default_matmul_precision", "highest")  # Enforce true 23-bit IEEE-754 FP32 even if Cell 5 is re-run standalone
 
 SEED_EQUIV = json.loads(\'\'\'__SEED_JSON__\'\'\')
+
+def _mm_fp32(a: jnp.ndarray, b: jnp.ndarray) -> jnp.ndarray:
+    return jnp.matmul(a, b, precision=jax.lax.Precision.HIGHEST)
 
 def _build_sym_matrices():'''
     cells.append(nbf.v4.new_code_cell(
@@ -1130,9 +1134,14 @@ def _build_sym_matrices():'''
             u1_mask[r, [9, 10, 21, 22, 33, 34]] = 0.0
         else:
             u1_mask[r, [21, 22, 33, 34]] = 0.0
-    return jnp.array(m_obs), jnp.array(m_act), jnp.array(u1_mask)
+    act_idx  = np.argmax(np.abs(m_act), axis=1).astype(np.int32)
+    act_sgn  = m_act[np.arange(ACT_DIM), act_idx].astype(np.float32)
+    obs_idx  = np.argmax(np.abs(m_obs), axis=0).astype(np.int32)
+    obs_sgn  = m_obs[obs_idx, np.arange(OBS_DIM)].astype(np.float32)
+    return (jnp.array(m_obs), jnp.array(m_act), jnp.array(u1_mask),
+            jnp.array(obs_idx), jnp.array(obs_sgn), jnp.array(act_idx), jnp.array(act_sgn))
 
-M_OBS_JAX, M_ACT_JAX, U1_CLOCK_MASK = _build_sym_matrices()
+M_OBS_JAX, M_ACT_JAX, U1_CLOCK_MASK, M_OBS_IDX, M_OBS_SGN, M_ACT_IDX, M_ACT_SGN = _build_sym_matrices()
 OBS_STAND_EQ = jnp.zeros((OBS_DIM,), dtype=jnp.float32).at[2].set(-1.0).at[35].set(1.0)
 ACT_RES_SCALE = jnp.where(jnp.arange(ACT_DIM) >= 10, RESIDUAL_SCALE * 0.25, RESIDUAL_SCALE)
 BASE_CPG = jnp.array(SEED_EQUIV["cpg"], dtype=jnp.float32)
@@ -1154,18 +1163,19 @@ def assemble_equivariant_actor(a_p: dict):
     B2_eff = a_p["B2"].at[:, 8].set(0.0).at[7, :].set(0.0).at[8, :].set(0.0)
     c2_eff = a_p["c2"].at[7].set(0.0).at[8].set(0.0)
 
-    W1 = jnp.concatenate([u1_eff, u1_eff @ M_OBS_JAX], axis=0)
+    # Bit-exact signed permutation (0.00e+00 rounding on all GPUs, immune to TF32!)
+    W1 = jnp.concatenate([u1_eff, u1_eff[:, M_OBS_IDX] * M_OBS_SGN[None, :]], axis=0)
     B1 = jnp.concatenate([c1_eff, c1_eff], axis=0)
     W2 = jnp.concatenate([
         jnp.concatenate([A2_eff, B2_eff], axis=1),
         jnp.concatenate([B2_eff, A2_eff], axis=1),
     ], axis=0)
     B2 = jnp.concatenate([c2_eff, c2_eff], axis=0)
-    W3 = jnp.concatenate([a_p["U3"], M_ACT_JAX @ a_p["U3"]], axis=1)
+    W3 = jnp.concatenate([a_p["U3"], a_p["U3"][M_ACT_IDX, :] * M_ACT_SGN[:, None]], axis=1)
 
-    h1_eq = jnp.tanh(W1 @ OBS_STAND_EQ + B1)
-    h2_eq = jnp.tanh(W2 @ h1_eq + B2)
-    B3 = -(W3 @ h2_eq)
+    h1_eq = jnp.tanh(_mm_fp32(W1, OBS_STAND_EQ) + B1)
+    h2_eq = jnp.tanh(_mm_fp32(W2, h1_eq) + B2)
+    B3 = -_mm_fp32(W3, h2_eq)
     cpg_d = jnp.clip(a_p["cpg_delta"], -0.14, 0.14).at[7].set(0.0).at[11].set(0.0)
     cpg = BASE_CPG + cpg_d
     return W1, B1, W2, B2, W3, B3, cpg
@@ -1246,9 +1256,6 @@ def forward_rma_student(st_p: dict, hist_flat: jnp.ndarray) -> jnp.ndarray:
 _CRITIC_GEMM_DTYPE = jnp.bfloat16 if HAS_A100_BF16 else jnp.float32
 v_cpg_batch = jax.vmap(compute_cpg_prior_jax, in_axes=(0, 0, 0, 0, None, 0))
 
-def _mm_fp32(a: jnp.ndarray, b: jnp.ndarray) -> jnp.ndarray:
-    return jnp.matmul(a, b, precision=jax.lax.Precision.HIGHEST)
-
 def forward_actor_critic(params: dict, obs: jnp.ndarray, priv_obs: jnp.ndarray, env_vec: jnp.ndarray,
                          phi: jnp.ndarray, cmd: jnp.ndarray, head_phase: jnp.ndarray):
     W1, B1, W2, B2, W3, B3, cpg = assemble_equivariant_actor(params["actor"])
@@ -1279,9 +1286,9 @@ _test_st = init_rma_student_params(jax.random.PRNGKey(SEED + 99))
 _W1, _B1, _W2, _B2, _W3, _B3, _ = assemble_equivariant_actor(_test_p["actor"])
 _rx = jax.random.normal(jax.random.PRNGKey(7), (16, OBS_DIM), dtype=jnp.float32)
 _f_rx = jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(_rx, _W1.T) + _B1), _W2.T) + _B2), _W3.T) + _B3)
-_rx_m = _mm_fp32(_rx, M_OBS_JAX.T)
+_rx_m = _rx[:, M_OBS_IDX] * M_OBS_SGN[None, :]
 _f_rxm = jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(_rx_m, _W1.T) + _B1), _W2.T) + _B2), _W3.T) + _B3)
-_sym_err = float(jnp.max(jnp.abs(_mm_fp32(_f_rx, M_ACT_JAX.T) - _f_rxm)))
+_sym_err = float(jnp.max(jnp.abs(_f_rx[:, M_ACT_IDX] * M_ACT_SGN[None, :] - _f_rxm)))
 _st_obs = OBS_STAND_EQ.at[9].set(0.6).at[10].set(0.8)
 _st_err = float(jnp.max(jnp.abs(jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(_st_obs, _W1.T) + _B1), _W2.T) + _B2), _W3.T) + _B3))))
 _n_crt_p = sum(x.size for x in jax.tree_util.tree_leaves(_test_p["critic"]))
