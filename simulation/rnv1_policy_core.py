@@ -173,7 +173,7 @@ class RNV1Policy:
         def fmt_arr(name: str, arr: np.ndarray) -> str:
             flat = arr.astype(np.float32).ravel()
             vals = ", ".join(f"{float(v):.7e}f" for v in flat)
-            return f"static const float {name}[{len(flat)}] = {{\n  {vals}\n}};\n"
+            return f"alignas(16) static const float {name}[{len(flat)}] = {{\n  {vals}\n}};\n"
 
         lines = [
             "// AUTO-GENERATED RNV1 NEURAL POLICY WEIGHTS (36 -> 64 -> 64 -> 12 + Universal-Ankle CPG)",

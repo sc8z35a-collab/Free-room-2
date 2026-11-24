@@ -24,6 +24,7 @@ static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
 static float g_cmd_vx = 0.0f, g_cmd_vy = 0.0f, g_cmd_yaw = 0.0f;
 static float g_tof_dist_m = 1.5f;
 static float g_head_yaw_rad = 0.0f, g_head_pitch_rad = 0.0f;
+static bool  g_low_batt_warn = false;
 static bool  g_emergency_stop = false;
 
 static uint16_t rad_to_pca9685_tick(float rad) {
@@ -80,13 +81,15 @@ static void task_locomotion_core1(void* /*pv*/) {
 
         // 2. Battery voltage check (2S Li-ion undervoltage protection)
         float vbat = (analogReadMilliVolts(PIN_VBAT_ADC) / 1000.0f) * VBAT_DIVIDER_RATIO;
-        bool low_batt = (vbat > 2.0f && vbat < VBAT_CUTOFF_V);
+        bool warn_batt = (vbat > 2.0f && vbat < VBAT_LOW_WARN_V);
+        bool low_batt  = (vbat > 2.0f && vbat < VBAT_CUTOFF_V);
         float tilt_rad = std::acos(rnv1::clampf(-proj_g[2], -1.0f, 1.0f));
 
         float vx, vy, yaw, tof_m;
         portENTER_CRITICAL(&g_mux);
         vx = g_cmd_vx; vy = g_cmd_vy; yaw = g_cmd_yaw;
         tof_m = g_tof_dist_m;
+        g_low_batt_warn = warn_batt;
         bool estop = g_emergency_stop || low_batt || (tilt_rad > FALL_TILT_MAX_RAD);
         portEXIT_CRITICAL(&g_mux);
 
@@ -96,16 +99,18 @@ static void task_locomotion_core1(void* /*pv*/) {
         }
 
         // 3. Build 36-D observation & run RNV1 neural policy (<0.55 ms!)
-        obs[0] = proj_g[0]; obs[1] = proj_g[1]; obs[2] = proj_g[2];
-        obs[3] = gx * 0.25f; obs[4] = gy * 0.25f; obs[5] = gz * 0.25f;
-        obs[6] = vx; obs[7] = vy; obs[8] = yaw;
-        obs[9]  = std::sin(2.0f * rnv1::PI_F * phi);
-        obs[10] = std::cos(2.0f * rnv1::PI_F * phi);
-        std::memcpy(&obs[11], prev_act, sizeof(prev_act));
-        std::memcpy(&obs[23], prev2_act, sizeof(prev2_act));
-        obs[35] = rnv1::clampf(tof_m / 1.5f, 0.0f, 1.0f);
+        alignas(16) float obs_aligned[RNV1_OBS_DIM];
+        obs_aligned[0] = proj_g[0]; obs_aligned[1] = proj_g[1]; obs_aligned[2] = proj_g[2];
+        obs_aligned[3] = gx * 0.25f; obs_aligned[4] = gy * 0.25f; obs_aligned[5] = gz * 0.25f;
+        obs_aligned[6] = vx; obs_aligned[7] = vy; obs_aligned[8] = yaw;
+        obs_aligned[9]  = std::sin(2.0f * rnv1::PI_F * phi);
+        obs_aligned[10] = std::cos(2.0f * rnv1::PI_F * phi);
+        std::memcpy(&obs_aligned[11], prev_act, sizeof(prev_act));
+        std::memcpy(&obs_aligned[23], prev2_act, sizeof(prev2_act));
+        obs_aligned[35] = rnv1::clampf(tof_m / 1.5f, 0.0f, 1.0f);
+        (void)obs;
 
-        rnv1::infer_policy(obs, phi, vx, vy, yaw, head_scan, target_q);
+        rnv1::infer_policy(obs_aligned, phi, vx, vy, yaw, head_scan, target_q);
 
         std::memcpy(prev2_act, prev_act, sizeof(prev_act));
         std::memcpy(prev_act, target_q, sizeof(target_q));
@@ -137,10 +142,12 @@ static void task_perception_core0(void* /*pv*/) {
         if (!tof.timeoutOccurred()) {
             float d_m = mm / 1000.0f;
             float hy, hp;
+            bool warn_batt = false;
             portENTER_CRITICAL(&g_mux);
             hy = g_head_yaw_rad;
             hp = g_head_pitch_rad;
             g_tof_dist_m = d_m;
+            warn_batt = g_low_batt_warn;
             portEXIT_CRITICAL(&g_mux);
 
             planner.update_tof_ray(hy, hp, d_m);
@@ -151,9 +158,12 @@ static void task_perception_core0(void* /*pv*/) {
             g_cmd_vx = vx; g_cmd_vy = vy; g_cmd_yaw = yaw;
             portEXIT_CRITICAL(&g_mux);
 
-            // Autonomous vocal status announcements when encountering obstacles/cliffs
+            // Autonomous vocal status announcements when encountering cliffs, obstacles, or low battery
             if (planner.cliff_detected && (millis() - last_speak_ms > 4000)) {
                 speak_offline_japanese("dansa hakken tomari masu");
+                last_speak_ms = millis();
+            } else if (warn_batt && (millis() - last_speak_ms > 12000)) {
+                speak_offline_japanese("denchi teika juuden shite kudasai");
                 last_speak_ms = millis();
             } else if (d_m < 0.25f && (millis() - last_speak_ms > 5000)) {
                 speak_offline_japanese("shougai butsu kaihi");

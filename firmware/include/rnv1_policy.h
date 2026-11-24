@@ -72,35 +72,38 @@ inline void compute_cpg_prior(
     }
 }
 
-inline void forward_mlp(const float obs[RNV1_OBS_DIM], float out[RNV1_ACT_DIM]) {
-    float h1[RNV1_H1_DIM];
-    float h2[RNV1_H2_DIM];
+inline float dot4_unrolled(const float* __restrict__ w, const float* __restrict__ x, int n, float bias) {
+    float s0 = bias, s1 = 0.0f, s2 = 0.0f, s3 = 0.0f;
+    int j = 0;
+    for (; j + 3 < n; j += 4) {
+        s0 += w[j]     * x[j];
+        s1 += w[j + 1] * x[j + 1];
+        s2 += w[j + 2] * x[j + 2];
+        s3 += w[j + 3] * x[j + 3];
+    }
+    for (; j < n; ++j) {
+        s0 += w[j] * x[j];
+    }
+    return (s0 + s1) + (s2 + s3);
+}
+
+inline void forward_mlp(const float* __restrict__ obs, float* __restrict__ out) {
+    alignas(16) float h1[RNV1_H1_DIM];
+    alignas(16) float h2[RNV1_H2_DIM];
 
     for (int i = 0; i < RNV1_H1_DIM; ++i) {
-        float acc = RNV1_B1[i];
         const float* row = &RNV1_W1[i * RNV1_OBS_DIM];
-        for (int j = 0; j < RNV1_OBS_DIM; ++j) {
-            acc += row[j] * obs[j];
-        }
-        h1[i] = std::tanh(acc);
+        h1[i] = std::tanh(dot4_unrolled(row, obs, RNV1_OBS_DIM, RNV1_B1[i]));
     }
 
     for (int i = 0; i < RNV1_H2_DIM; ++i) {
-        float acc = RNV1_B2[i];
         const float* row = &RNV1_W2[i * RNV1_H1_DIM];
-        for (int j = 0; j < RNV1_H1_DIM; ++j) {
-            acc += row[j] * h1[j];
-        }
-        h2[i] = std::tanh(acc);
+        h2[i] = std::tanh(dot4_unrolled(row, h1, RNV1_H1_DIM, RNV1_B2[i]));
     }
 
     for (int i = 0; i < RNV1_ACT_DIM; ++i) {
-        float acc = RNV1_B3[i];
         const float* row = &RNV1_W3[i * RNV1_H2_DIM];
-        for (int j = 0; j < RNV1_H2_DIM; ++j) {
-            acc += row[j] * h2[j];
-        }
-        out[i] = std::tanh(acc);
+        out[i] = std::tanh(dot4_unrolled(row, h2, RNV1_H2_DIM, RNV1_B3[i]));
     }
 }
 

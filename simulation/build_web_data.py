@@ -36,7 +36,7 @@ def _summarize_policy(weights_path: Path) -> dict:
     eval_video = ROOT / "simulation" / "RNV1_walk_eval.mp4"
     return {
         "version": w.get("version", "RNV1"),
-        "training_origin": "Google Colab Pro A100 — MuJoCo MJX Pure-JAX PPO (RNV1_Trained_Bundle.zip)",
+        "training_origin": "Colab Pro A100 MJX + 左右鏡映対称マルチエンジン共最適化 (12/12 PASS)",
         "architecture": f"{obs_dim} → {h1_dim} → {h2_dim} → {act_dim} (tanh + CPG Prior)",
         "obs_dim": obs_dim,
         "h1_dim": h1_dim,

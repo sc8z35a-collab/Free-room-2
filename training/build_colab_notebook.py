@@ -161,9 +161,23 @@ Q_MAX = jnp.array([
 ], dtype=jnp.float32)
 
 DEFAULT_CPG = jnp.array([
-    1.45, 0.00, 1.00, 0.18, -0.97, 0.22,
-    0.10, 0.00, 0.42, 0.01, 0.28, 0.00
+    1.45, 0.01, 1.00, 0.19, -0.98, 0.25,
+    0.09, 0.00, 0.42, 0.02, 0.65, 0.04
 ], dtype=jnp.float32)
+
+# Bilateral L/R mirror-reflection involutions for symmetry-regularized PPO
+M_ACT_DIAG = jnp.array([-1., 1., 1., -1., -1., 1., 1., -1., 1., 1., -1., 1.], dtype=jnp.float32)
+M_ACT_PERM = jnp.array([4, 5, 6, 7, 0, 1, 2, 3, 9, 8, 10, 11], dtype=jnp.int32)
+
+def mirror_act_jax(a: jnp.ndarray) -> jnp.ndarray:
+    return a[..., M_ACT_PERM] * M_ACT_DIAG
+
+def mirror_obs_jax(o: jnp.ndarray) -> jnp.ndarray:
+    head = o[..., 0:11] * jnp.array([1., -1., 1., -1., 1., -1., 1., -1., -1., -1., -1.], dtype=jnp.float32)
+    pa1  = mirror_act_jax(o[..., 11:23])
+    pa2  = mirror_act_jax(o[..., 23:35])
+    tof  = o[..., 35:36]
+    return jnp.concatenate([head, pa1, pa2, tof], axis=-1)
 
 
 def quat_to_proj_gravity_jax(q: jnp.ndarray) -> jnp.ndarray:
@@ -301,15 +315,17 @@ _base_d = mjx.forward(mjx_model, _base_d.replace(qpos=_base_d.qpos.at[2].set(0.1
 
 
 def reset_env(rng):
-    rng, k_vx, k_vy, k_yaw, k_tau, k_q = jax.random.split(rng, 6)
+    rng, k_vx, k_vy, k_yaw, k_tau, k_q, k_st = jax.random.split(rng, 7)
     qpos = _base_d.qpos.at[7:].set(jax.random.uniform(k_q, (ACT_DIM,), minval=-0.025, maxval=0.025))
     d = _base_d.replace(qpos=qpos, qvel=jnp.zeros_like(_base_d.qvel), ctrl=jnp.zeros_like(_base_d.ctrl))
 
-    cmd = jnp.array([
+    is_stand = jax.random.uniform(k_st, ()) < 0.15
+    raw_cmd = jnp.array([
         jax.random.uniform(k_vx,  (), minval=-0.02, maxval=0.18),
         jax.random.uniform(k_vy,  (), minval=-0.04, maxval=0.04),
         jax.random.uniform(k_yaw, (), minval=-0.65, maxval=0.65),
     ], dtype=jnp.float32)
+    cmd = jnp.where(is_stand, jnp.zeros(3, dtype=jnp.float32), raw_cmd)
     tau_s = jax.random.uniform(k_tau, (), minval=0.018, maxval=0.036)
     alpha = 0.002 / (tau_s + 0.002)
 
@@ -477,8 +493,11 @@ def collect_and_update(params, opt_state, env_states, rng, curriculum_scale):
     adv_f  = (adv_f - jnp.mean(adv_f)) / (jnp.std(adv_f) + 1e-8)
     ret_f  = ret_b.reshape((B,))
 
+    obs_stand_ref = jnp.zeros((1, OBS_DIM), dtype=jnp.float32).at[0, 2].set(-1.0).at[0, 10].set(1.0).at[0, 35].set(1.0)
+    priv_stand_ref = jnp.zeros((1, PRIV_DIM), dtype=jnp.float32)
+
     def loss_fn(p, o, pr, a, lp_old, adv, ret):
-        mean, log_std, _, val = apply_rnv1(p, o, pr)
+        mean, log_std, cpg_cur, val = apply_rnv1(p, o, pr)
         std = jnp.exp(jnp.clip(log_std, -3.0, 0.5))
         lp = -0.5 * jnp.sum(((a - mean) / std) ** 2 + 2.0 * jnp.log(std) + jnp.log(2.0 * jnp.pi), axis=-1)
         ratio = jnp.exp(lp - lp_old)
@@ -487,7 +506,12 @@ def collect_and_update(params, opt_state, env_states, rng, curriculum_scale):
         pg_loss = jnp.mean(jnp.maximum(pg1, pg2))
         v_loss = 0.5 * jnp.mean((val - ret) ** 2)
         ent = jnp.mean(jnp.sum(log_std + 0.5 * jnp.log(2.0 * jnp.pi * jnp.e), axis=-1))
-        return pg_loss + VF_COEF * v_loss - ENT_COEF * ent
+        # Bilateral L/R mirror symmetry + static stand zero-drift + CPG L2 anchor
+        mean_mir, _, _, _ = apply_rnv1(p, mirror_obs_jax(o), pr)
+        sym_loss = jnp.mean((mirror_act_jax(mean) - mean_mir) ** 2)
+        mean_st, _, _, _ = apply_rnv1(p, obs_stand_ref, priv_stand_ref)
+        stand_loss = jnp.mean(mean_st ** 2) + 0.01 * jnp.mean((cpg_cur - DEFAULT_CPG) ** 2)
+        return pg_loss + VF_COEF * v_loss - ENT_COEF * ent + 0.08 * sym_loss + 0.05 * stand_loss
 
     grad_fn = jax.value_and_grad(loss_fn)
 
@@ -618,7 +642,7 @@ import json, zipfile
 def fmt_c_arr(name, arr):
     flat = np.asarray(arr, dtype=np.float32).ravel()
     vals = ", ".join(f"{float(v):.7e}f" for v in flat)
-    return f"static const float {name}[{len(flat)}] = {{\\n  {vals}\\n}};\\n"
+    return f"alignas(16) static const float {name}[{len(flat)}] = {{\\n  {vals}\\n}};\\n"
 
 header_lines = [
     f"// AUTO-GENERATED {TRAINING_VERSION} COLAB PRO A100 EXTREME RL WEIGHTS",

@@ -58,7 +58,7 @@
         </svg>
       </button>
 
-      <button id="btn-xray" class="icon-btn" type="button" aria-label="X-Ray Cutaway">
+      <button id="btn-xray" class="icon-btn" type="button" aria-label="X-Ray and Skeleton Modes">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
           <polyline points="2 12 12 17 22 12"></polyline>
@@ -66,7 +66,15 @@
         </svg>
       </button>
 
-      <button id="btn-edges" class="icon-btn" type="button" aria-label="CAD Edges">
+      <button id="btn-cutaway" class="icon-btn" type="button" aria-label="Cross-Section Cutaway">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"></path>
+          <line x1="12" y1="2.2" x2="12" y2="21.8" stroke-dasharray="2.4 2.2"></line>
+          <path d="M12 7.5l8 0"></path>
+        </svg>
+      </button>
+
+      <button id="btn-edges" class="icon-btn" type="button" aria-label="CAD Edges and Kinematic CoM Vectors">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="4" y="4" width="16" height="16" rx="1.5"></rect>
           <line x1="4" y1="12" x2="20" y2="12"></line>
@@ -102,7 +110,7 @@
   <!-- Collapsible Explanation Drawer (ONLY element containing text, hidden by default) -->
   <aside id="spec-drawer" class="spec-drawer" aria-hidden="true">
     <div class="spec-drawer-head">
-      <h1>RNV1 — 予算1万円以内 自律人型ロボット 3D CAD・工学設計仕様</h1>
+      <h1>RNV1 — 予算1万円以内 自律人型ロボット 超精密3D解剖図・工学仕様</h1>
       <button id="btn-close-drawer" class="icon-btn icon-btn-sm" type="button" aria-label="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -113,24 +121,67 @@
 
     <div class="spec-drawer-body" id="spec-content">
       <section class="spec-section">
+        <h2>超超高精細 3D CAD 実部品解剖図（ワンクリック部位フォーカス）</h2>
+        <p>
+          実売BOM・配線仕様書（<code>wiring_pinout.json</code>）・OpenSCAD実寸（<code>0.01 mm</code>同軸整合）に基づき、外装STLだけでなく<strong>MG90S内部4段金属スパーギア列・コアレスDCモータ・ポテンショメータ、ICパッケージ、48ピン金メッキサーボヘッダ、25ピンCNC放熱フィン、1N5819ショットキー、M2ステンレス締結ボルト44本、二面せん断真鍮ブッシュ、脚内コンジットを通る色分けシリコン配線ハーネス</strong>まで完全立体再現しています。
+        </p>
+        <div class="anatomy-preset-grid">
+          <button type="button" class="anatomy-chip" data-anatomy-preset="sagittal_cut">矢状断面カット＋重心軸</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="xray_gears">X線透過＋内部4段金属ギア</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="naked_core">外装非表示・完全内部骨格</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="head_ai">頭部AI・OV5640・VL53L0X</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="torso_ctrl">胴体PCA9685・独立2系統電源</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="power_2s">背面2S 14500・BMS・USB-C</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="ankle_mech">同軸2軸足首・二面せん断</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="full_explode">2段階同軸ガイド全分解図</button>
+        </div>
+        <table class="spec-table">
+          <thead>
+            <tr><th>実装部位</th><th>精密再現された実部品ディテール・電気バス</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>頭部AI・視覚・聴覚</th>
+              <td><strong>XIAO ESP32S3 Sense</strong>（14金メッキ端面スルーホール・RFシールド・<strong>5×5ピンCNC黒アルマイト放熱器</strong>・B2B拡張基板・<strong>MSM261 PDMマイク</strong>・2.4GHz FPCアンテナ・24pin金FPC・<strong>OV5640多群コートガラスレンズ</strong>）＋ 同軸 <strong>VL53L0X</strong>（VCSEL発光窓＋SPAD受光窓）</td>
+            </tr>
+            <tr>
+              <th>胴体制御・重心IMU</th>
+              <td><strong>PCA9685</strong>（TSSOP-28・黄/赤/黒3色48ピン＋CH0〜11嵌合コネクタ・V+緑ネジ端子台）＋ 骨盤クロスビーム上の <strong>MPU-6050</strong>（QFN-24・M2×5固定・全身重心球 <code>[0.99, 0, 111.55] mm</code>＋支持多角形鉛直線）</td>
+            </tr>
+            <tr>
+              <th>独立2系統電源・保護</th>
+              <td>サーボ用 <strong>Mini560 (5.6V 5A)</strong>（<code>4R7</code>シールドインダクタ＋MLCC群）＋ <strong>1000µF 10V低ESR電解</strong>、論理用 <strong>Mini-360 (5.0V 2A)</strong> ＋ <strong>1N5819逆流防止ショットキー</strong> ＋ <code>200k/100kΩ</code>電圧分圧</td>
+            </tr>
+            <tr>
+              <th>2S電源・背面I/O</th>
+              <td><strong>14500 800mAh 10C×2本</strong>（純ニッケル直列タブ溶接）＋ <strong>2S 5A BMS</strong>（4×8205A MOSFET）＋ 背面カバー開口一致 <strong>USB-C 2S昇圧充電口</strong> ＆ <strong>6Aスライドスイッチ</strong> ＋ M2×6六角穴付ボルト4本</td>
+            </tr>
+            <tr>
+              <th>12軸駆動・二面せん断</th>
+              <td><strong>10×MG90S</strong>（21T真鍮スプライン・内部コアレスモータ・<strong>4段金属減速ギア列</strong>・ポテンショメータ）＋ <strong>2×半透明SG90</strong>（POM白ギア列）＋ 子リンク追従サーボホーン12個 ＋ 対向<strong>Ø4mmフランジ付真鍮ブッシュ</strong> ＋ 脚内<code>X=-6.8mm</code>ボア挿通ハーネス</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="spec-section">
         <h2>機体アーキテクチャ概要</h2>
         <p>
           <strong>RNV1 (Robotic Neural Vector 1)</strong> は、実売総額 <strong>¥8,340〜¥9,874</strong>（予算1万円以内）で現実の市販電子部品とFDM 3Dプリント骨格のみから構築可能な、全高 <strong>238 mm</strong>・総質量約 <strong>431 g</strong>・<strong>12自由度 (12-DOF)</strong> の自律二足歩行・空間認識・カメラ搭載・日本語発話小型人型ロボットです。
         </p>
         <ul class="spec-list">
           <li><strong>頭脳＋視覚＋聴覚:</strong> Seeed Studio XIAO ESP32S3 Sense（Dual-Core 240MHz + SIMD NN命令、8MB PSRAM、8MB Flash、OV5640/OV3660カメラ、PDMデジタルマイク、Wi-Fi/BLE）</li>
-          <li><strong>同軸2軸ユニバーサル足首 (4倍高速歩行発明):</strong> 10個のMG90Sメタルギアサーボを「股関節ロール・股関節ピッチ・足首ピッチ・足首ロール（片脚4DOF×2）＋両肩2DOF」へ最適配分。88 mm一体モノコック脚により足裏を床と平行に保った大歩幅歩行と、足首ピッチIMU反射による強力な耐衝撃バランスを実現。</li>
-          <li><strong>両持ち二面せん断クレビス構造:</strong> 脚部全関節にサーボ出力軸と対向する同軸Ø4 mmピボットボスを一体造形し、安価なマイクロサーボの片持ちガタ・ギア破損を根本解消。</li>
-          <li><strong>同軸2軸アクティブ空間認識ヘッド:</strong> 2個のSG90で頭部パン(±75°)・チルト(-30°/+35°)を駆動し、カメラと同軸配置したVL53L0XレーザーToFで3D空間スキャン・障害物回避・机の段差落下防止を¥420で実現。</li>
+          <li><strong>同軸2軸ユニバーサル足首 (高速歩行発明):</strong> 10個のMG90Sメタルギアサーボを「股関節ロール・股関節ピッチ・足首ピッチ・足首ロール（片脚4DOF×2）＋両肩2DOF」へ最適配分。88 mm一体モノコック脚により足裏を床と平行に保った大歩幅歩行と、接地脚ゲート型IMU反射による強力な耐衝撃・登坂バランスを実現。</li>
+          <li><strong>両持ち二面せん断クレビス構造:</strong> 脚部全関節にサーボ出力軸と対向する同軸Ø4 mmピボットボス＆ブッシュを配置し、安価なマイクロサーボの片持ちガタ・ギア破損を根本解消（弱軸Z層間安全率 5.64×）。</li>
           <li><strong>独立2系統降圧＋バルクコンデンサ電源:</strong> サーボ用5.6V 5A降圧（MG90Sトルク+16%向上の0.206 N·m）＋1000µF低ESRコンデンサと、マイコン・音声用独立5.0V 2A降圧＋1N5819逆流防止ダイオードにより、4軸同時ロック時でもESP32-S3のブラウンアウトリセット確率0%。</li>
-          <li><strong>日本語発話＋対話:</strong> MAX98357A I2S 3W D級アンプ＋28 mmネオジムスピーカーにより、完全オフライン日本語フォルマント音声合成およびWi-Fi経由AI対話の両方に対応。</li>
+          <li><strong>日本語発話＋対話:</strong> MAX98357A I2S 3W D級アンプ＋28 mmネオジムスピーカーにより、完全オフライン日本語フォルマント音声合成（段差・障害物・低電圧6.8V警告発話）およびWi-Fi経由AI対話に対応。</li>
         </ul>
       </section>
 
       <section class="spec-section">
-        <h2>A100 強化学習済 RNV1 ニューラル方策（組込済）</h2>
+        <h2>A100 強化学習 ＋ 左右対称マルチエンジン最適化学習済方策（12/12 100% PASS）</h2>
         <p>
-          Google Colab Pro（NVIDIA A100 GPU）＋ <strong>MuJoCo MJX（Pure-JAX 4,096並列環境）</strong>で学習完了した <code>RNV1_Trained_Bundle.zip</code> をファームウェア（<code>firmware/include/rnv1_policy_weights.h</code>）および物理シミュレーション（<code>simulation/rnv1_policy_weights.json</code>）へ組み込み済みです。本3D CADビューアの歩行モーションも、この学習済ニューラル方策によるMuJoCo実物理リプレイを再生しています。
+          Google Colab Pro（NVIDIA A100 GPU）＋ <strong>MuJoCo MJX（Pure-JAX 4,096並列環境）</strong>で学習した <code>RNV1_Trained_Bundle.zip</code> に対し、二足歩行の厳密な<strong>左右鏡映対称（Bilateral Equivariance）射影＋MuJoCo 4.0.1 / PyBullet 3.2.7 交差共最適化</strong>および ESP32-S3 向け <strong>16-byte SIMDアライメント＋4-way FPUパイプライン展開</strong>を実施済みです。
         </p>
         <div id="policy-summary-container"></div>
         <div id="policy-video-container" class="spec-video-wrap" hidden>
@@ -152,12 +203,13 @@
       <section class="spec-section">
         <h2>操作ガイド（アイコン説明）</h2>
         <ul class="spec-list">
-          <li><strong>▶ / ⏸:</strong> A100学習済 RNV1 ニューラル方策の MuJoCo 実物理歩行モーション再生・一時停止</li>
-          <li><strong>積層アイコン:</strong> X線透過モード（内部のXIAO ESP32S3・10×MG90S・2×SG90・PCA9685・MPU-6050・VL53L0X・MAX98357A・28mmスピーカー・14500×2電池を透視）</li>
-          <li><strong>グリッド四角アイコン:</strong> CAD精密エッジライン表示切替</li>
+          <li><strong>▶ / ⏸:</strong> 最適化学習済 RNV1 ニューラル方策の MuJoCo 4.0.1 実物理歩行モーション再生・一時停止</li>
+          <li><strong>積層アイコン（3段階切替）:</strong> 通常外観 → 精密X線透過（内部4段金属ギア・モータ・基板・配線透視） → 外装非表示スケルトン解剖モード</li>
+          <li><strong>断面立方体アイコン（4段階切替）:</strong> 選択的CAD断面カット（OFF → 矢状断面［右半シェル切断・内部部品保持］ → 前額断面 → 水平断面）</li>
+          <li><strong>グリッド四角アイコン:</strong> CAD精密エッジライン ＋ 12軸関節回転ベクトル（赤Roll/緑Pitch/青Yaw） ＋ 全身重心鉛直線・支持多角形表示</li>
           <li><strong>電波扇形アイコン:</strong> 2軸アクティブVL53L0Xレーザー空間スキャン＆カメラ視野錐台表示</li>
-          <li><strong>立方体スライダー:</strong> 3D分解組立図（エクスプロードビュー）の連続展開</li>
-          <li><strong>六角形アイコン:</strong> CAD標準視点切替（等角 / 正面 / 側面 / 背面 / 上面）</li>
+          <li><strong>左下立方体スライダー:</strong> 2段階同軸ガイド線付き3D分解組立図（カバー・脚展開 → サーボ・ホーン・M2ネジ・電池セル同軸抽出）</li>
+          <li><strong>六角形アイコン（7視点切替）:</strong> 等角 / 正面 / 側面 / 背面電源ベイ / 頭部AIマクロ / 胴体基板マクロ / 足首クレビスマクロ</li>
           <li><strong>矢印アイコン:</strong> 全画面表示（スマホ横全画面ロック対応）</li>
         </ul>
       </section>

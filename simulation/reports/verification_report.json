@@ -1,9 +1,9 @@
 {
   "project": "RNV1 (Robotic Neural Vector 1)",
-  "elapsed_s": 10.5,
-  "passed_suites": 10,
+  "elapsed_s": 17.0,
+  "passed_suites": 12,
   "total_suites": 12,
-  "all_100pct_passed": false,
+  "all_100pct_passed": true,
   "suites": [
     {
       "suite": "1_CAD_Printability_Watertightness",
@@ -56,48 +56,48 @@
     },
     {
       "suite": "4_MuJoCo_4_Locomotion_Push_Slope_DR30",
-      "passed": false,
+      "passed": true,
       "metrics": {
-        "walk_10s_dist_m": 0.9118,
-        "walk_10s_vx_mps": 0.0912,
-        "walk_10s_max_tilt_deg": 6.3,
+        "walk_10s_dist_m": 0.8043,
+        "walk_10s_vx_mps": 0.0804,
+        "walk_10s_max_tilt_deg": 13.15,
         "walk_10s_peak_torque_nm": 0.206,
-        "walk_10s_rms_torque_nm": 0.0489,
-        "turn_left_6s_yaw_rad": -0.047,
-        "turn_right_6s_yaw_rad": -0.2778,
-        "stand_5s_max_tilt_deg": 11.87,
+        "walk_10s_rms_torque_nm": 0.0511,
+        "turn_left_6s_yaw_rad": 0.942,
+        "turn_right_6s_yaw_rad": -0.9381,
+        "stand_5s_max_tilt_deg": 0.05,
         "push_lateral_1.6N_survived": true,
         "push_sagittal_1.8N_survived": true,
-        "slope_5deg_6s_dist_m": -0.0215,
+        "slope_5deg_6s_dist_m": 0.3289,
         "monte_carlo_30_survival_pct": 100.0,
-        "monte_carlo_mean_5s_dist_m": 0.463
+        "monte_carlo_mean_5s_dist_m": 0.354
       }
     },
     {
       "suite": "5_PyBullet_3_CrossEngine_Validation",
-      "passed": false,
+      "passed": true,
       "metrics": {
-        "pybullet_stand_4s_fell": true,
-        "pybullet_stand_4s_tilt_deg": 46.99,
-        "pybullet_walk_6s_fell": true,
-        "pybullet_walk_6s_dist_m": 0.2642,
-        "pybullet_walk_6s_tilt_deg": 46.3
+        "pybullet_stand_4s_fell": false,
+        "pybullet_stand_4s_tilt_deg": 0.12,
+        "pybullet_walk_6s_fell": false,
+        "pybullet_walk_6s_dist_m": 0.5714,
+        "pybullet_walk_6s_tilt_deg": 14.94
       }
     },
     {
       "suite": "6_Electrical_Power_Brownout_Runtime",
       "passed": true,
       "metrics": {
-        "avg_walk_power_W": 10.9,
-        "avg_servo_current_A": 1.51,
-        "avg_battery_current_A": 1.47,
-        "peak_surge_battery_A": 4.39,
-        "peak_c_rate_of_10C_cell": 5.49,
-        "min_battery_voltage_30pctSoC_V": 6.13,
+        "avg_walk_power_W": 11.24,
+        "avg_servo_current_A": 1.57,
+        "avg_battery_current_A": 1.52,
+        "peak_surge_battery_A": 4.44,
+        "peak_c_rate_of_10C_cell": 5.55,
+        "min_battery_voltage_30pctSoC_V": 6.12,
         "min_servo_rail_transient_V": 5.25,
         "min_xiao_5v_input_after_diode_V": 4.63,
         "brownout_margin_above_3v65_V": 0.98,
-        "continuous_walk_runtime_min": 29.3
+        "continuous_walk_runtime_min": 28.5
       }
     },
     {
@@ -106,10 +106,10 @@
       "metrics": {
         "ambient_C": 30.0,
         "xiao_esp32s3_peak_C": 53.22,
-        "mg90s_servo_peak_C": 48.79,
-        "buck_converter_peak_C": 61.15,
-        "liion_battery_peak_C": 41.03,
-        "chassis_wall_peak_C": 47.13
+        "mg90s_servo_peak_C": 49.56,
+        "buck_converter_peak_C": 62.12,
+        "liion_battery_peak_C": 41.57,
+        "chassis_wall_peak_C": 47.66
       }
     },
     {
@@ -127,7 +127,7 @@
       "passed": true,
       "metrics": {
         "gpp_strict_zero_warnings": true,
-        "python_cpp_max_abs_diff_rad": 1.36e-06,
+        "python_cpp_max_abs_diff_rad": 1.4e-07,
         "imu_filter_convergence_err_rad": 0.0,
         "cpp_spatial_and_cliff_ok": true,
         "offline_jp_speech_pcm_rms": 20547.0,

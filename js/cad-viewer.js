@@ -1,10 +1,26 @@
 import * as THREE from '../vendor/three/three.module.min.js';
 import { OrbitControls } from '../vendor/three/OrbitControls.js';
 import { STLLoader } from '../vendor/three/STLLoader.js';
+import {
+  MM,
+  computeCreasedNormals,
+  createAnatomyMaterials,
+  createM2SocketBolt,
+  createDualShearBushing,
+  createServoHornAssembly,
+  createPrecisionServo,
+  createXiaoESP32S3SenseAssembly,
+  createVL53L0XAssembly,
+  createPCA9685Assembly,
+  createMPU6050CoMAssembly,
+  createDualBuckPowerNodes,
+  createAudioSystemNodes,
+  createBattery2SAndRearIO,
+  createCompleteWiringHarnesses,
+  attachKinematicAndCoMGuides,
+} from './rnv1-anatomy.js';
 
-const MM = 0.001; // Millimeters -> meters
-
-// --- Setup Pure White (#FFFFFF) Studio WebGL Renderer ---
+// --- Setup Pure White (#FFFFFF) Studio WebGL Renderer with Selective Section Clipping ---
 const canvas = document.getElementById('cad-canvas');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -12,14 +28,15 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0xffffff, 1);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.localClippingEnabled = true;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.06;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffffff);
 
-// --- Studio Three-Point Industrial CAD Lighting ---
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe8edf5, 1.05);
+// --- Studio Three-Point + Interior Fill CAD Lighting ---
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe8edf5, 1.08);
 hemiLight.position.set(0, 1.0, 0);
 scene.add(hemiLight);
 
@@ -29,7 +46,7 @@ keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(2048, 2048);
 keyLight.shadow.camera.near = 0.1;
 keyLight.shadow.camera.far = 3.0;
-const sc = 0.35;
+const sc = 0.38;
 keyLight.shadow.camera.left = -sc;
 keyLight.shadow.camera.right = sc;
 keyLight.shadow.camera.top = sc;
@@ -37,17 +54,17 @@ keyLight.shadow.camera.bottom = -sc;
 keyLight.shadow.bias = -0.0004;
 scene.add(keyLight);
 
-const fillLight = new THREE.DirectionalLight(0xf2f6ff, 0.55);
-fillLight.position.set(-0.65, 0.45, -0.40);
+const fillLight = new THREE.DirectionalLight(0xf2f6ff, 0.62);
+fillLight.position.set(-0.65, 0.45, -0.45);
 scene.add(fillLight);
 
-const rimLight = new THREE.DirectionalLight(0xffffff, 0.48);
-rimLight.position.set(-0.25, 0.75, 0.65);
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.52);
+rimLight.position.set(-0.20, 0.65, 0.70);
 scene.add(rimLight);
 
 // Invisible Shadow-Catcher Plane on Pure White Studio Floor (Y = 0)
 const shadowFloor = new THREE.Mesh(
-  new THREE.PlaneGeometry(2.4, 2.4),
+  new THREE.PlaneGeometry(2.6, 2.6),
   new THREE.ShadowMaterial({ opacity: 0.13 })
 );
 shadowFloor.rotation.x = -Math.PI / 2;
@@ -56,22 +73,29 @@ shadowFloor.receiveShadow = true;
 scene.add(shadowFloor);
 
 // --- Camera & Damped OrbitControls ---
-const camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.01, 20);
+const camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.008, 20);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.dampingFactor = 0.07;
-controls.minDistance = 0.18;
-controls.maxDistance = 1.25;
+controls.dampingFactor = 0.075;
+controls.minDistance = 0.11;
+controls.maxDistance = 1.35;
 controls.maxPolarAngle = Math.PI * 0.495;
 
+// Note: OpenSCAD (+X fwd, +Y left, +Z up) mapped via worldRobot.rotation.x = -PI/2 -> Three.js (+X fwd, +Y up, -Z left / +Z right)
 const VIEW_PRESETS = [
-  { pos: [0.38, 0.23, 0.38], target: [0.0, 0.118, 0.0] },   // 3/4 Isometric Hero
-  { pos: [0.48, 0.13, 0.00], target: [0.0, 0.118, 0.0] },   // Front Elevation
-  { pos: [0.00, 0.13, 0.48], target: [0.0, 0.118, 0.0] },   // Right Profile
-  { pos: [-0.48, 0.15, 0.05], target: [0.0, 0.118, 0.0] },  // Rear Service Bay
-  { pos: [0.06, 0.54, 0.06], target: [0.0, 0.118, 0.0] },   // Top Orthographic-style
+  { pos: [0.38, 0.23, 0.38],  target: [0.0, 0.118, 0.0] },    // 0: 3/4 Isometric Hero
+  { pos: [0.46, 0.13, 0.00],  target: [0.0, 0.118, 0.0] },    // 1: Front Elevation
+  { pos: [0.02, 0.135, 0.46], target: [0.0, 0.118, 0.0] },    // 2: Right Sagittal Profile
+  { pos: [-0.44, 0.15, 0.08], target: [0.0, 0.128, 0.0] },    // 3: Rear Battery / BMS / USB-C Service Bay
+  { pos: [0.16, 0.232, 0.14], target: [0.008, 0.214, 0.0] },  // 4: Macro — 2-DOF Active Spatial Head & XIAO ESP32S3
+  { pos: [0.20, 0.172, 0.20], target: [0.0, 0.150, 0.0] },    // 5: Macro — Torso PCA9685 / Dual Bucks / CoM IMU
+  { pos: [0.18, 0.058, 0.18], target: [0.005, 0.028, 0.0] },  // 6: Macro — Coaxial 2-DOF Universal Ankle & Dual-Shear Clevis
+  { pos: [0.64, 0.34, 0.64],  target: [0.0, 0.125, 0.0] },    // 7: Wide Studio Framing for Full 2-Stage Exploded View
 ];
 let currentViewIdx = 0;
+const targetCamPos = new THREE.Vector3(...VIEW_PRESETS[0].pos);
+const targetLookAt = new THREE.Vector3(...VIEW_PRESETS[0].target);
+let camLerping = false;
 
 function applyCameraPreset(idx, instant = false) {
   const vp = VIEW_PRESETS[idx % VIEW_PRESETS.length];
@@ -85,388 +109,449 @@ function applyCameraPreset(idx, instant = false) {
     camLerping = true;
   }
 }
-const targetCamPos = new THREE.Vector3(...VIEW_PRESETS[0].pos);
-const targetLookAt = new THREE.Vector3(...VIEW_PRESETS[0].target);
-let camLerping = false;
 applyCameraPreset(0, true);
 controls.addEventListener('start', () => { camLerping = false; });
 
-// --- Physically Based Industrial CAD Materials ---
-const shellMaterials = [];
-function makeShellMat(hex = 0xf4f6f9, rough = 0.42, metal = 0.05) {
-  const m = new THREE.MeshStandardMaterial({
-    color: hex, roughness: rough, metalness: metal,
-    transparent: false, opacity: 1.0, side: THREE.DoubleSide
-  });
-  shellMaterials.push(m);
-  return m;
-}
+// --- Dynamic Selective Cross-Section Cutaway Planes (Slices Shells & Servo Cases, Keeps Internals Whole!) ---
+const activeSectionPlanes = [];
+const PLANE_SAGITTAL = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0.002);   // Slices right half (Z_three > +2mm)
+const PLANE_CORONAL  = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0.003);   // Slices front half (X_three > +3mm)
+const PLANE_AXIAL    = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.168);   // Horizontal top-down torso floorplan cut
+let cutawayMode = 0; // 0: Off, 1: Sagittal, 2: Coronal, 3: Axial
 
-const matShellPrimary   = makeShellMat(0xf4f6f9, 0.40, 0.05); // Matte Pearl-White PETG/PLA+
-const matShellAccent    = makeShellMat(0xe5e9f0, 0.48, 0.08); // Light Titanium-Gray Structural Brackets
-const matVisor          = makeShellMat(0x161b24, 0.14, 0.35); // Glossy Smoked Optical Visor
-const matSoleSilicone   = new THREE.MeshStandardMaterial({ color: 0x26292e, roughness: 0.88, metalness: 0.02 });
-const matServoMG90S     = new THREE.MeshStandardMaterial({ color: 0x1d4d8f, roughness: 0.36, metalness: 0.12 });
-const matServoSG90      = new THREE.MeshStandardMaterial({ color: 0x2e7fd1, roughness: 0.32, metalness: 0.08, transparent: true, opacity: 0.90 });
-const matBrass          = new THREE.MeshStandardMaterial({ color: 0xc8a452, roughness: 0.28, metalness: 0.85 });
-const matAluminum       = new THREE.MeshStandardMaterial({ color: 0xcbd2db, roughness: 0.26, metalness: 0.82 });
-const matHeatsink       = new THREE.MeshStandardMaterial({ color: 0x1e2229, roughness: 0.35, metalness: 0.72 });
-const matPCBBlack       = new THREE.MeshStandardMaterial({ color: 0x191d24, roughness: 0.50, metalness: 0.10 });
-const matPCBBlue        = new THREE.MeshStandardMaterial({ color: 0x14417a, roughness: 0.48, metalness: 0.10 });
-const matPCBPurple      = new THREE.MeshStandardMaterial({ color: 0x562c7a, roughness: 0.48, metalness: 0.10 });
-const matPCBGreen       = new THREE.MeshStandardMaterial({ color: 0x1a683f, roughness: 0.50, metalness: 0.10 });
-const matBatteryCopper  = new THREE.MeshStandardMaterial({ color: 0xc26a2e, roughness: 0.34, metalness: 0.45 });
-const matLensGlass      = new THREE.MeshPhysicalMaterial({ color: 0x0b1629, roughness: 0.06, metalness: 0.15, clearcoat: 1.0 });
-const edgeLineMat       = new THREE.LineBasicMaterial({ color: 0x1c2430, transparent: true, opacity: 0.24 });
+const mats = createAnatomyMaterials(activeSectionPlanes);
+const edgeLineMat = new THREE.LineBasicMaterial({
+  color: 0x1c2430, transparent: true, opacity: 0.26, clippingPlanes: activeSectionPlanes,
+});
+const witnessLineMat = new THREE.LineDashedMaterial({
+  color: 0x64748b, dashSize: 0.0035, gapSize: 0.0025, transparent: true, opacity: 0.62,
+});
 
+const shellMeshes = [];
 const edgeLines = [];
-const explodeEntries = []; // { obj, basePos: Vector3, explodeDir: Vector3 }
+const explodeEntries = []; // { obj, basePos, explodeDir, stage, witnessLine, witnessAttr }
+const harnessGroups = [];
 
-function registerExplode(obj, dx, dy, dz) {
-  explodeEntries.push({
-    obj,
-    basePos: obj.position.clone(),
-    explodeDir: new THREE.Vector3(dx * MM, dy * MM, dz * MM),
-  });
+function setOrthonormalBasis(obj, ex, ey, ez) {
+  const m = new THREE.Matrix4().makeBasis(
+    new THREE.Vector3(...ex),
+    new THREE.Vector3(...ey),
+    new THREE.Vector3(...ez)
+  );
+  obj.quaternion.setFromRotationMatrix(m);
 }
 
-// --- Procedural Precision Electronic CAD Component Builders (in OpenSCAD mm -> m) ---
-function createMG90S(isSG90 = false) {
-  const g = new THREE.Group();
-  const mat = isSG90 ? matServoSG90 : matServoMG90S;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(22.8*MM, 12.2*MM, 22.0*MM), mat);
-  body.castShadow = true;
-  g.add(body);
-  const flange = new THREE.Mesh(new THREE.BoxGeometry(32.2*MM, 12.2*MM, 2.4*MM), mat);
-  flange.position.z = 5.5*MM;
-  g.add(flange);
-  const dome = new THREE.Mesh(new THREE.CylinderGeometry(5.8*MM, 5.8*MM, 4.5*MM, 20), isSG90 ? mat : matAluminum);
-  dome.rotation.x = Math.PI / 2;
-  dome.position.set(5.5*MM, 0, 12.5*MM);
-  g.add(dome);
-  const spline = new THREE.Mesh(new THREE.CylinderGeometry(2.4*MM, 2.4*MM, 3.6*MM, 16), matBrass);
-  spline.rotation.x = Math.PI / 2;
-  spline.position.set(5.5*MM, 0, 16.0*MM);
-  g.add(spline);
-  return g;
-}
+function registerExplode(obj, dx, dy, dz, { stage = 1, witness = true } = {}) {
+  const basePos = obj.position.clone();
+  const explodeDir = new THREE.Vector3(dx * MM, dy * MM, dz * MM);
+  let witnessLine = null;
+  let witnessAttr = null;
 
-function createXiaoESP32S3Sense() {
-  const g = new THREE.Group();
-  // Main XIAO PCB (21 x 17.8 x 1.6mm) facing +X
-  const pcb = new THREE.Mesh(new THREE.BoxGeometry(2.0*MM, 17.8*MM, 21.0*MM), matPCBBlack);
-  g.add(pcb);
-  // Dual black anodized aluminum heatsinks on rear
-  const hs = new THREE.Mesh(new THREE.BoxGeometry(3.2*MM, 11.0*MM, 11.0*MM), matHeatsink);
-  hs.position.x = -2.6*MM;
-  g.add(hs);
-  // Sense camera expansion daughterboard + OV5640/OV3660 lens barrel facing +X
-  const camPcb = new THREE.Mesh(new THREE.BoxGeometry(1.6*MM, 17.8*MM, 21.0*MM), matPCBBlack);
-  camPcb.position.x = 5.5*MM;
-  g.add(camPcb);
-  const lensBarrel = new THREE.Mesh(new THREE.CylinderGeometry(4.0*MM, 4.2*MM, 5.0*MM, 24), matHeatsink);
-  lensBarrel.rotation.z = Math.PI / 2;
-  lensBarrel.position.set(8.6*MM, 0, 0);
-  g.add(lensBarrel);
-  const lensGlass = new THREE.Mesh(new THREE.CylinderGeometry(2.6*MM, 2.6*MM, 0.8*MM, 20), matLensGlass);
-  lensGlass.rotation.z = Math.PI / 2;
-  lensGlass.position.set(11.1*MM, 0, 0);
-  g.add(lensGlass);
-  // Gold castellated pads
-  for (let side of [-1, 1]) {
-    const pads = new THREE.Mesh(new THREE.BoxGeometry(1.4*MM, 1.4*MM, 18.0*MM), matBrass);
-    pads.position.set(0, side * 8.4*MM, 0);
-    g.add(pads);
+  if (witness && obj.parent && explodeDir.length() > 0.004) {
+    const pts = new Float32Array([
+      basePos.x, basePos.y, basePos.z,
+      basePos.x, basePos.y, basePos.z,
+    ]);
+    const g = new THREE.BufferGeometry();
+    witnessAttr = new THREE.BufferAttribute(pts, 3);
+    g.setAttribute('position', witnessAttr);
+    witnessLine = new THREE.Line(g, witnessLineMat);
+    witnessLine.visible = false;
+    obj.parent.add(witnessLine);
   }
-  return g;
+
+  explodeEntries.push({ obj, basePos, explodeDir, stage, witnessLine, witnessAttr });
 }
 
-function createVL53L0X() {
-  const g = new THREE.Group();
-  const pcb = new THREE.Mesh(new THREE.BoxGeometry(1.6*MM, 13.3*MM, 10.5*MM), matPCBPurple);
-  g.add(pcb);
-  const sensor = new THREE.Mesh(new THREE.BoxGeometry(1.4*MM, 4.4*MM, 2.4*MM), matLensGlass);
-  sensor.position.x = 1.4*MM;
-  g.add(sensor);
-  return g;
-}
-
-function createBatteryPack2S() {
-  const g = new THREE.Group();
-  for (let sy of [-8.0, 8.0]) {
-    const cell = new THREE.Mesh(new THREE.CylinderGeometry(7.0*MM, 7.0*MM, 50.0*MM, 24), matBatteryCopper);
-    cell.rotation.x = Math.PI / 2; // Vertical along Z in OpenSCAD frame
-    cell.position.set(0, sy*MM, 0);
-    cell.castShadow = true;
-    g.add(cell);
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(5.5*MM, 5.5*MM, 1.4*MM, 16), matAluminum);
-    cap.rotation.x = Math.PI / 2;
-    cap.position.set(0, sy*MM, 25.5*MM);
-    g.add(cap);
-  }
-  const bms = new THREE.Mesh(new THREE.BoxGeometry(3.0*MM, 28.0*MM, 10.0*MM), matPCBGreen);
-  bms.position.set(-7.5*MM, 0, -18.0*MM);
-  g.add(bms);
-  return g;
-}
-
-function createSpeaker28mm() {
-  const g = new THREE.Group();
-  const frame = new THREE.Mesh(new THREE.CylinderGeometry(14.0*MM, 14.0*MM, 4.5*MM, 28), matHeatsink);
-  frame.rotation.z = Math.PI / 2;
-  g.add(frame);
-  const mag = new THREE.Mesh(new THREE.CylinderGeometry(7.5*MM, 7.5*MM, 3.5*MM, 20), matAluminum);
-  mag.rotation.z = Math.PI / 2;
-  mag.position.x = -3.6*MM;
-  g.add(mag);
-  return g;
-}
-
-// --- Articulated 12-DOF Humanoid Scene Graph (Exact Match to OpenSCAD & MuJoCo!) ---
-// Wrap entire OpenSCAD/MuJoCo (+Z Up) coordinate system inside Three.js (+Y Up) via -90deg X rotation!
+// ============================================================================
+// ARTICULATED 12-DOF HUMANOID SCENE GRAPH (Exact 0.01mm Coaxial Match to CAD!)
+// ============================================================================
 const worldRobot = new THREE.Group();
 worldRobot.rotation.x = -Math.PI / 2;
 scene.add(worldRobot);
 
 const torsoGroup = new THREE.Group();
-torsoGroup.position.set(0, 0, 124.0 * MM); // Z_HIP_ROLL = 124mm
+torsoGroup.position.set(0, 0, 124.0 * MM); // Global Z_HIP_ROLL = 124.0 mm
 worldRobot.add(torsoGroup);
 
-// Internal Torso Electronics (visible in X-Ray & Exploded Views!)
-const batteryGroup = createBatteryPack2S();
-batteryGroup.position.set(-10.0*MM, 0, 29.0*MM);
-torsoGroup.add(batteryGroup);
-registerExplode(batteryGroup, -36, 0, 0);
+// --- 1. Torso Power, Control, IMU, Audio & Rear Service Hardware ---
+const { packGroup, cells, bmsGroup, rearIOGroup } = createBattery2SAndRearIO(mats);
+packGroup.position.set(-10.5 * MM, 0, 32.0 * MM);
+torsoGroup.add(packGroup);
+torsoGroup.add(rearIOGroup);
+registerExplode(packGroup, -34, 0, 4, { stage: 1 });
+registerExplode(cells[0], -10, -8, 12, { stage: 2 });
+registerExplode(cells[1], -10,  8, 12, { stage: 2 });
+registerExplode(bmsGroup, -14,  0,  0, { stage: 2 });
+registerExplode(rearIOGroup, -44, 0, -4, { stage: 1 });
 
-const pca9685Mesh = new THREE.Mesh(new THREE.BoxGeometry(2.2*MM, 60.0*MM, 24.0*MM), matPCBBlue);
-pca9685Mesh.position.set(-2.0*MM, 0, 32.0*MM);
-torsoGroup.add(pca9685Mesh);
-registerExplode(pca9685Mesh, -22, 0, 8);
+// 4x M2x6 Stainless Socket-Head Cap Screws on torso_back_cover (Y = +-26mm, Z = 10mm & 48mm)
+for (const sy of [-26.0, 26.0]) {
+  for (const dz of [10.0, 48.0]) {
+    const bolt = createM2SocketBolt(mats, 6.5);
+    setOrthonormalBasis(bolt, [0, 1, 0], [0, 0, 1], [-1, 0, 0]); // Head faces -X, shaft threads +X into torso
+    bolt.position.set(-26.8 * MM, sy * MM, dz * MM);
+    torsoGroup.add(bolt);
+    registerExplode(bolt, -76, sy * 0.12, 0, { stage: 2 });
+  }
+}
 
-const imuMesh = new THREE.Mesh(new THREE.BoxGeometry(15.8*MM, 20.5*MM, 2.2*MM), matPCBBlue);
-imuMesh.position.set(2.0*MM, 0, 14.0*MM); // Exact Torso CoM!
-torsoGroup.add(imuMesh);
-registerExplode(imuMesh, 0, 0, -14);
+const pca9685Group = createPCA9685Assembly(mats);
+pca9685Group.position.set(1.2 * MM, 0, 33.0 * MM);
+torsoGroup.add(pca9685Group);
+registerExplode(pca9685Group, -14, 0, 16, { stage: 1 });
 
-const buck5A = new THREE.Mesh(new THREE.BoxGeometry(18.0*MM, 28.0*MM, 6.0*MM), matPCBGreen);
-buck5A.position.set(4.0*MM, -16.0*MM, 24.0*MM);
+const imuCoMGroup = createMPU6050CoMAssembly(mats);
+imuCoMGroup.position.set(2.0 * MM, 0, 14.0 * MM); // Exact Pelvis Cross-Tie Beam CoM Mount!
+torsoGroup.add(imuCoMGroup);
+registerExplode(imuCoMGroup, 14, 0, -16, { stage: 2 });
+
+const { buck5A, cap1000, buck2A } = createDualBuckPowerNodes(mats);
+buck5A.position.set(9.5 * MM, -21.0 * MM, 25.0 * MM);
 torsoGroup.add(buck5A);
-registerExplode(buck5A, 16, -24, 0);
+registerExplode(buck5A, 18, -30, 0, { stage: 1 });
 
-const buck2A = new THREE.Mesh(new THREE.BoxGeometry(12.0*MM, 18.0*MM, 4.5*MM), matPCBGreen);
-buck2A.position.set(4.0*MM, 18.0*MM, 24.0*MM);
+cap1000.position.set(13.5 * MM, -14.0 * MM, 17.5 * MM);
+torsoGroup.add(cap1000);
+registerExplode(cap1000, 28, -22, -10, { stage: 2 });
+
+buck2A.position.set(10.0 * MM, 21.0 * MM, 22.5 * MM);
 torsoGroup.add(buck2A);
-registerExplode(buck2A, 16, 24, 0);
+registerExplode(buck2A, 18, 30, -4, { stage: 1 });
 
-const cap1000uF = new THREE.Mesh(new THREE.CylinderGeometry(5.0*MM, 5.0*MM, 12.0*MM, 20), matHeatsink);
-cap1000uF.position.set(11.0*MM, -18.0*MM, 19.0*MM);
-torsoGroup.add(cap1000uF);
-registerExplode(cap1000uF, 24, -24, -6);
+const { ampGroup, spkGroup } = createAudioSystemNodes(mats);
+ampGroup.position.set(11.5 * MM, 19.5 * MM, 39.5 * MM);
+torsoGroup.add(ampGroup);
+registerExplode(ampGroup, 24, 26, 10, { stage: 2 });
 
-const ampMax98357 = new THREE.Mesh(new THREE.BoxGeometry(2.0*MM, 18.0*MM, 19.0*MM), matPCBPurple);
-ampMax98357.position.set(12.0*MM, 16.0*MM, 38.0*MM);
-torsoGroup.add(ampMax98357);
-registerExplode(ampMax98357, 26, 20, 8);
+spkGroup.position.set(20.5 * MM, 0, 34.0 * MM); // Exact chest acoustic cavity!
+torsoGroup.add(spkGroup);
+registerExplode(spkGroup, 36, 0, 4, { stage: 1 });
 
-const speakerGroup = createSpeaker28mm();
-speakerGroup.position.set(20.0*MM, 0, 34.0*MM);
-torsoGroup.add(speakerGroup);
-registerExplode(speakerGroup, 36, 0, 4);
+// --- 2. Torso-Mounted Servos (Hip Roll L/R, Shoulder L/R, Neck Pan SG90) ---
+for (const side of [1, -1]) {
+  const sy = side * 23.0;
+  // Hip Roll MG90S: spline along +X at (10.8, sy, 0), body extending +Z inside pelvis bulkhead!
+  const svHipR = createPrecisionServo(mats, false);
+  setOrthonormalBasis(svHipR, [0, 0, -1], [0, 1, 0], [1, 0, 0]);
+  svHipR.position.set(10.8 * MM, sy * MM, 0);
+  torsoGroup.add(svHipR);
+  registerExplode(svHipR, 14, side * 10, 6, { stage: 2 });
 
-// Hip Roll + Shoulder + Neck Pan Servos inside Torso
-for (const sy of [-23.0, 23.0]) {
-  const sv = createMG90S(false);
-  sv.rotation.y = Math.PI / 2;
-  sv.position.set(-2.0*MM, sy*MM, 0);
-  torsoGroup.add(sv);
+  // Opposing Rear Pelvis Dual-Shear Bushing at (-12.5, sy, 0)
+  const bushHipR = createDualShearBushing(mats);
+  setOrthonormalBasis(bushHipR, [0, 1, 0], [0, 0, 1], [-1, 0, 0]);
+  bushHipR.position.set(-12.5 * MM, sy * MM, 0);
+  torsoGroup.add(bushHipR);
+  registerExplode(bushHipR, -18, side * 10, 0, { stage: 2 });
+
+  // Shoulder MG90S: spline along side*Y at (0, side*43.2, 46.0), body along -X inside ribcage!
+  const svSh = createPrecisionServo(mats, false);
+  setOrthonormalBasis(svSh, [1, 0, 0], [0, 0, -side], [0, side, 0]);
+  svSh.position.set(0, side * 43.2 * MM, 46.0 * MM);
+  torsoGroup.add(svSh);
+  registerExplode(svSh, 0, side * 16, 8, { stage: 2 });
 }
-for (const side of [-1, 1]) {
-  const sv = createMG90S(false);
-  sv.rotation.x = side * Math.PI / 2;
-  sv.position.set(0, side * 25.0*MM, 46.0*MM);
-  torsoGroup.add(sv);
-}
-const neckPanServo = createMG90S(true);
-neckPanServo.position.set(0, 0, 50.0*MM);
+
+const neckPanServo = createPrecisionServo(mats, true); // Translucent SG90 CH10
+neckPanServo.position.set(0, 0, 62.2 * MM);
 torsoGroup.add(neckPanServo);
+registerExplode(neckPanServo, 0, 0, 10, { stage: 2 });
 
-// --- 2-DOF Active Spatial Head ---
+// --- 3. 2-DOF Active Spatial Head & Sensor Pod ---
 const headYawJoint = new THREE.Group();
-headYawJoint.position.set(0, 0, 64.0 * MM); // Global Z = 188mm
+headYawJoint.position.set(0, 0, 64.0 * MM); // Global Z = 188.0 mm
 torsoGroup.add(headYawJoint);
-registerExplode(headYawJoint, 0, 0, 18);
+registerExplode(headYawJoint, 0, 0, 22, { stage: 1 });
 
-const headTiltServo = createMG90S(true);
-headTiltServo.rotation.x = -Math.PI / 2;
-headTiltServo.position.set(0, 0, 11.0*MM);
+// Rotating Neck Yaw SG90 Servo Horn mounted on underside of neck_gimbal
+const { group: yawHorn } = createServoHornAssembly(mats, { isSG90: true, armLenMM: 10.5 });
+setOrthonormalBasis(yawHorn, [1, 0, 0], [0, -1, 0], [0, 0, -1]);
+yawHorn.position.set(0, 0, -0.5 * MM);
+headYawJoint.add(yawHorn);
+registerExplode(yawHorn, 0, 0, -8, { stage: 2 });
+
+// Head Tilt SG90 (CH11): spline along +Y at (0, +10.8, 16.0), body extending -Z inside neck_gimbal!
+const headTiltServo = createPrecisionServo(mats, true);
+setOrthonormalBasis(headTiltServo, [0, 0, 1], [1, 0, 0], [0, 1, 0]);
+headTiltServo.position.set(0, 10.8 * MM, 16.0 * MM);
 headYawJoint.add(headTiltServo);
+registerExplode(headTiltServo, 0, 14, 0, { stage: 2 });
 
 const headPitchJoint = new THREE.Group();
-headPitchJoint.position.set(0, 0, 16.0 * MM); // Global Z = 204mm
+headPitchJoint.position.set(0, 0, 16.0 * MM); // Global Z = 204.0 mm
 headYawJoint.add(headPitchJoint);
-registerExplode(headPitchJoint, 0, 0, 26);
+registerExplode(headPitchJoint, 0, 0, 28, { stage: 1 });
 
-// Internal Head Electronics (XIAO ESP32S3 Sense + Coaxial VL53L0X)
-const xiaoGroup = createXiaoESP32S3Sense();
-xiaoGroup.position.set(11.0*MM, 0, 15.0*MM);
+// Rotating Head Tilt SG90 Horn (+Y ear) & Opposing Dual-Shear Bushing (-Y ear)
+const { group: tiltHorn } = createServoHornAssembly(mats, { isSG90: true, armLenMM: 9.5 });
+setOrthonormalBasis(tiltHorn, [0, 0, 1], [1, 0, 0], [0, 1, 0]);
+tiltHorn.position.set(0, 13.4 * MM, 0);
+headPitchJoint.add(tiltHorn);
+registerExplode(tiltHorn, 0, 16, 0, { stage: 2 });
+
+const headTiltBush = createDualShearBushing(mats);
+setOrthonormalBasis(headTiltBush, [1, 0, 0], [0, 0, 1], [0, -1, 0]);
+headTiltBush.position.set(0, -13.4 * MM, 0);
+headPitchJoint.add(headTiltBush);
+registerExplode(headTiltBush, 0, -16, 0, { stage: 2 });
+
+// Internal Head Compute & Coaxial Vision/Laser Suite (XIAO ESP32S3 Sense + VL53L0X)
+const xiaoGroup = createXiaoESP32S3SenseAssembly(mats);
+xiaoGroup.position.set(9.8 * MM, 0, 15.0 * MM); // Lens apex sits coaxially in head_visor Ø8.6mm port!
 headPitchJoint.add(xiaoGroup);
-registerExplode(xiaoGroup, 24, 0, 8);
+registerExplode(xiaoGroup, 22, 0, 10, { stage: 2 });
 
-const tofGroup = createVL53L0X();
-tofGroup.position.set(19.0*MM, 0, 5.0*MM);
+const tofGroup = createVL53L0XAssembly(mats);
+tofGroup.position.set(18.6 * MM, 0, 5.0 * MM); // Optical apertures coaxial with head_visor Z=+5.0mm window!
 headPitchJoint.add(tofGroup);
-registerExplode(tofGroup, 30, 0, -4);
+registerExplode(tofGroup, 30, 0, -6, { stage: 2 });
 
-// Active Spatial ToF Laser Beam & OV5640 Camera FOV Frustum Visualization
+// Active Spatial ToF 940nm Laser Cone & OV5640 62-deg Camera FOV Frustum
 const sensorVizGroup = new THREE.Group();
 headPitchJoint.add(sensorVizGroup);
 
-// Camera 62-deg FOV translucent wireframe frustum expanding cleanly from lens toward +X
 const camConeGeo = new THREE.ConeGeometry(0.088, 0.16, 4, 1, true);
-camConeGeo.rotateZ(Math.PI / 2); // Apex at -X (lens), open square base at +X
+camConeGeo.rotateZ(Math.PI / 2);
 camConeGeo.rotateX(Math.PI / 4);
 const camConeWire = new THREE.LineSegments(
   new THREE.EdgesGeometry(camConeGeo),
-  new THREE.LineBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.26 })
+  new THREE.LineBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.28 })
 );
 camConeWire.position.set(0.102, 0, 15.0 * MM);
 sensorVizGroup.add(camConeWire);
 
-// Coaxial VL53L0X 940nm Laser 25-deg Scan Cone expanding cleanly outward from emitter toward +X
 const tofBeamGeo = new THREE.CylinderGeometry(0.022, 0.0014, 0.17, 16, 1, true);
-tofBeamGeo.rotateZ(-Math.PI / 2); // radiusBottom (1.4mm) at -X emitter, radiusTop (22mm) at +X far end!
+tofBeamGeo.rotateZ(-Math.PI / 2);
 const tofBeam = new THREE.Mesh(
   tofBeamGeo,
-  new THREE.MeshBasicMaterial({ color: 0x06b6d4, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false })
+  new THREE.MeshBasicMaterial({
+    color: 0x06b6d4, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false
+  })
 );
 tofBeam.position.set(0.107, 0, 5.0 * MM);
 sensorVizGroup.add(tofBeam);
 
 const tofCenterRay = new THREE.Line(
   new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(22.0*MM, 0, 5.0*MM),
-    new THREE.Vector3(192.0*MM, 0, 5.0*MM)
+    new THREE.Vector3(21.0 * MM, 0, 5.0 * MM),
+    new THREE.Vector3(192.0 * MM, 0, 5.0 * MM),
   ]),
-  new THREE.LineBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.55 })
+  new THREE.LineBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.58 })
 );
 sensorVizGroup.add(tofCenterRay);
 
-// --- Arms ---
-const lShoulderJoint = new THREE.Group();
-lShoulderJoint.position.set(0, 46.0*MM, 46.0*MM);
-torsoGroup.add(lShoulderJoint);
-registerExplode(lShoulderJoint, 0, 32, 0);
+// --- 4. Left & Right Arms + Rotating Shoulder Horns ---
+function buildArmAssembly(side) {
+  const shJoint = new THREE.Group();
+  shJoint.position.set(0, side * 46.0 * MM, 46.0 * MM);
+  torsoGroup.add(shJoint);
+  registerExplode(shJoint, 0, side * 34, 0, { stage: 1 });
 
-const rShoulderJoint = new THREE.Group();
-rShoulderJoint.position.set(0, -46.0*MM, 46.0*MM);
-torsoGroup.add(rShoulderJoint);
-registerExplode(rShoulderJoint, 0, -32, 0);
+  const { group: shHorn } = createServoHornAssembly(mats, { isSG90: false, armLenMM: 11.5 });
+  setOrthonormalBasis(shHorn, [0, 0, -1], [side, 0, 0], [0, side, 0]);
+  shHorn.position.set(0, -side * 3.2 * MM, 0);
+  shJoint.add(shHorn);
+  registerExplode(shHorn, 0, -side * 10, 0, { stage: 2 });
 
-// --- Universal-Ankle Legs (L & R) ---
+  return shJoint;
+}
+const lShoulderJoint = buildArmAssembly(+1);
+const rShoulderJoint = buildArmAssembly(-1);
+
+// --- 5. Coaxial 2-DOF Universal-Ankle Legs (Exact 0.01mm Spline/Horn/Bushing Alignment!) ---
 function buildLegChain(side) {
   const hipRoll = new THREE.Group();
-  hipRoll.position.set(0, side * 23.0*MM, 0);
+  hipRoll.position.set(0, side * 23.0 * MM, 0);
   torsoGroup.add(hipRoll);
-  registerExplode(hipRoll, 0, side * 18, -14);
+  registerExplode(hipRoll, 0, side * 18, -14, { stage: 1 });
+
+  // Rotating Hip Roll Horn on front clevis ear (+X = +12.6mm)
+  const { group: hrHorn } = createServoHornAssembly(mats, { armLenMM: 10.0 });
+  setOrthonormalBasis(hrHorn, [0, 0, -1], [0, 1, 0], [1, 0, 0]);
+  hrHorn.position.set(12.6 * MM, 0, 0);
+  hipRoll.add(hrHorn);
+  registerExplode(hrHorn, 14, 0, 0, { stage: 2 });
+
+  // Hip Pitch MG90S inside hip_clevis (spline along +Y at Z = -18mm)
+  const svHipP = createPrecisionServo(mats, false);
+  setOrthonormalBasis(svHipP, [0, 0, -1], [-1, 0, 0], [0, 1, 0]);
+  svHipP.position.set(0, (side * 3.0 + 10.4) * MM, -18.0 * MM);
+  hipRoll.add(svHipP);
+  registerExplode(svHipP, 0, 14, 6, { stage: 2 });
 
   const hipPitch = new THREE.Group();
-  hipPitch.position.set(0, side * 3.0*MM, -18.0*MM);
+  hipPitch.position.set(0, side * 3.0 * MM, -18.0 * MM);
   hipRoll.add(hipPitch);
-  registerExplode(hipPitch, 0, side * 12, -16);
+  registerExplode(hipPitch, 0, side * 10, -18, { stage: 1 });
 
-  // Hip Pitch MG90S inside hip_clevis
-  const svHip = createMG90S(false);
-  svHip.rotation.x = -Math.PI / 2;
-  svHip.position.set(0, 0, -16.0*MM);
-  hipRoll.add(svHip);
+  // Rotating Hip Pitch Horn (+Y fork) & Opposing Dual-Shear Bushing (-Y fork)
+  const { group: hpHorn } = createServoHornAssembly(mats, { armLenMM: 11.0 });
+  setOrthonormalBasis(hpHorn, [0, 0, -1], [-1, 0, 0], [0, 1, 0]);
+  hpHorn.position.set(0, 12.5 * MM, 0);
+  hipPitch.add(hpHorn);
+  registerExplode(hpHorn, 0, 14, 0, { stage: 2 });
+
+  const hpBush = createDualShearBushing(mats);
+  setOrthonormalBasis(hpBush, [1, 0, 0], [0, 0, 1], [0, -1, 0]);
+  hpBush.position.set(0, -12.5 * MM, 0);
+  hipPitch.add(hpBush);
+  registerExplode(hpBush, 0, -14, 0, { stage: 2 });
+
+  // Ankle Pitch MG90S at bottom of 88mm leg_link (spline along +Y at Z = -88mm)
+  const svAnkP = createPrecisionServo(mats, false);
+  setOrthonormalBasis(svAnkP, [0, 0, -1], [-1, 0, 0], [0, 1, 0]);
+  svAnkP.position.set(0, 10.4 * MM, -88.0 * MM);
+  hipPitch.add(svAnkP);
+  registerExplode(svAnkP, 0, 14, 6, { stage: 2 });
 
   const anklePitch = new THREE.Group();
-  anklePitch.position.set(0, 0, -88.0*MM); // Full 88mm sculpted leg strut!
+  anklePitch.position.set(0, 0, -88.0 * MM);
   hipPitch.add(anklePitch);
-  registerExplode(anklePitch, 0, 0, -20);
+  registerExplode(anklePitch, 0, 0, -20, { stage: 1 });
 
-  // Ankle Pitch MG90S at lower leg strut
-  const svAnkP = createMG90S(false);
-  svAnkP.rotation.x = -Math.PI / 2;
-  svAnkP.position.set(0, 0, -82.0*MM);
-  hipPitch.add(svAnkP);
+  // Rotating Ankle Pitch Horn (+Y ear) & Opposing Dual-Shear Bushing (-Y ear)
+  const { group: apHorn } = createServoHornAssembly(mats, { armLenMM: 9.5 });
+  setOrthonormalBasis(apHorn, [0, 0, 1], [1, 0, 0], [0, 1, 0]);
+  apHorn.position.set(0, 12.5 * MM, 0);
+  anklePitch.add(apHorn);
+  registerExplode(apHorn, 0, 14, 0, { stage: 2 });
+
+  const apBush = createDualShearBushing(mats);
+  setOrthonormalBasis(apBush, [1, 0, 0], [0, 0, 1], [0, -1, 0]);
+  apBush.position.set(0, -12.5 * MM, 0);
+  anklePitch.add(apBush);
+  registerExplode(apBush, 0, -14, 0, { stage: 2 });
+
+  // Ankle Roll MG90S coaxially inside ankle_clevis (spline along +X at Z = 0)
+  const svAnkR = createPrecisionServo(mats, false);
+  setOrthonormalBasis(svAnkR, [0, 0, -1], [0, 1, 0], [1, 0, 0]);
+  svAnkR.position.set(10.6 * MM, 0, 0);
+  anklePitch.add(svAnkR);
+  registerExplode(svAnkR, 14, 0, 6, { stage: 2 });
 
   const ankleRoll = new THREE.Group();
   ankleRoll.position.set(0, 0, 0);
   anklePitch.add(ankleRoll);
-  registerExplode(ankleRoll, 0, 0, -18);
+  registerExplode(ankleRoll, 0, 0, -18, { stage: 1 });
 
-  // Ankle Roll MG90S inside universal ankle_clevis
-  const svAnkR = createMG90S(false);
-  svAnkR.rotation.y = Math.PI / 2;
-  svAnkR.position.set(0, 0, 1.5*MM);
-  anklePitch.add(svAnkR);
+  // Rotating Ankle Roll Horn on front foot tower (+X = +13.0mm) & Rear Opposing Bushing (-X = -12.6mm)
+  const { group: arHorn } = createServoHornAssembly(mats, { armLenMM: 10.5 });
+  setOrthonormalBasis(arHorn, [0, 1, 0], [0, 0, 1], [1, 0, 0]);
+  arHorn.position.set(13.0 * MM, 0, 0);
+  ankleRoll.add(arHorn);
+  registerExplode(arHorn, 15, 0, 0, { stage: 2 });
 
-  // 2mm Silicone Anti-Slip Sole Pad under Foot
-  const pad = new THREE.Mesh(new THREE.BoxGeometry(44.0*MM, 40.0*MM, 2.0*MM), matSoleSilicone);
-  pad.position.set(3.0*MM, 0, -17.0*MM);
+  const arBush = createDualShearBushing(mats);
+  setOrthonormalBasis(arBush, [0, 1, 0], [0, 0, 1], [-1, 0, 0]);
+  arBush.position.set(-12.6 * MM, 0, 0);
+  ankleRoll.add(arBush);
+  registerExplode(arBush, -15, 0, 0, { stage: 2 });
+
+  // High-Friction 2.0 mm Silicone Sole Pad recessed into foot_sole bottom pocket (mu >= 0.90)
+  const pad = new THREE.Mesh(new THREE.BoxGeometry(43.6 * MM, 39.6 * MM, 2.0 * MM), mats.soleSilicone);
+  pad.position.set(3.0 * MM, 0, -17.5 * MM);
   pad.receiveShadow = true;
   ankleRoll.add(pad);
-  registerExplode(pad, 0, 0, -14);
+  registerExplode(pad, 0, 0, -16, { stage: 2 });
 
   return { hipRoll, hipPitch, anklePitch, ankleRoll };
 }
 
-const leftLeg = buildLegChain(+1);
+const leftLeg  = buildLegChain(+1);
 const rightLeg = buildLegChain(-1);
 
-// --- Load Actual OpenSCAD-Compiled Watertight STL Parts ---
+// --- 6. Complete Color-Coded 3D Silicone Power, I2C, I2S & Internal Conduit Wiring Harnesses ---
+const harnesses = createCompleteWiringHarnesses(mats);
+torsoGroup.add(harnesses.torsoHarness);
+headPitchJoint.add(harnesses.headHarness);
+leftLeg.hipPitch.add(harnesses.leftLegHarness);
+rightLeg.hipPitch.add(harnesses.rightLegHarness);
+harnessGroups.push(
+  harnesses.torsoHarness,
+  harnesses.headHarness,
+  harnesses.leftLegHarness,
+  harnesses.rightLegHarness
+);
+
+// --- 7. Kinematic 12-DOF Joint Axis Vectors + Whole-Body CoM Plumb-Line Indicator ---
+const kinematicMarkers = attachKinematicAndCoMGuides({
+  torsoGroup, headYawJoint, headPitchJoint, lShoulderJoint, rShoulderJoint, leftLeg, rightLeg
+});
+
+// ============================================================================
+// DEDUPLICATED & CREASE-SMOOTHED OPENSCAD WATERTIGHT STL LOADER
+// ============================================================================
 const stlLoader = new STLLoader();
-function mountSTL(url, parent, mat, offsetMM = [0, 0, 0], explodeMM = null) {
-  stlLoader.load(url, (geo) => {
-    geo.scale(MM, MM, MM);
-    geo.computeVertexNormals();
+const stlCache = new Map();
+let showEdges = false;
+
+function loadCachedSTL(url) {
+  if (!stlCache.has(url)) {
+    stlCache.set(url, new Promise((resolve, reject) => {
+      stlLoader.load(url, (rawGeo) => {
+        rawGeo.scale(MM, MM, MM);
+        computeCreasedNormals(rawGeo, 30.0);
+        const edgeGeo = new THREE.EdgesGeometry(rawGeo, 26);
+        resolve({ geo: rawGeo, edgeGeo });
+      }, undefined, reject);
+    }));
+  }
+  return stlCache.get(url);
+}
+
+function mountSTL(url, parent, mat, offsetMM = [0, 0, 0], explodeMM = null, explodeStage = 1) {
+  loadCachedSTL(url).then(({ geo, edgeGeo }) => {
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(offsetMM[0]*MM, offsetMM[1]*MM, offsetMM[2]*MM);
+    mesh.position.set(offsetMM[0] * MM, offsetMM[1] * MM, offsetMM[2] * MM);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     parent.add(mesh);
+    shellMeshes.push(mesh);
 
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 26), edgeLineMat);
+    // Apply current anatomy shell visibility if loaded after user clicked X-Ray
+    mesh.visible = (xrayStage < 2);
+
+    const edges = new THREE.LineSegments(edgeGeo, edgeLineMat);
     edges.visible = showEdges;
     mesh.add(edges);
     edgeLines.push(edges);
 
-    if (explodeMM) registerExplode(mesh, ...explodeMM);
+    if (explodeMM) registerExplode(mesh, ...explodeMM, { stage: explodeStage });
   });
 }
 
-let showEdges = false;
+mountSTL('cad/stl/torso_chassis.stl',     torsoGroup,         mats.shellPrimary, [0, 0, 0],         null);
+mountSTL('cad/stl/torso_back_cover.stl',  torsoGroup,         mats.shellAccent,  [0, 0, 0],         [-58, 0, 0], 1);
+mountSTL('cad/stl/neck_gimbal.stl',       headYawJoint,       mats.shellAccent,  [0, 0, 0],         null);
+mountSTL('cad/stl/head_shell.stl',        headPitchJoint,     mats.shellPrimary, [0, 0, 0],         null);
+mountSTL('cad/stl/head_visor.stl',        headPitchJoint,     mats.visor,        [0, 0, 0],         [42, 0, 0],  1);
+mountSTL('cad/stl/arm_link_left.stl',     lShoulderJoint,     mats.shellPrimary, [0, 0, 0],         null);
+mountSTL('cad/stl/arm_link_right.stl',    rShoulderJoint,     mats.shellPrimary, [0, 0, 0],         null);
 
-mountSTL('cad/stl/torso_chassis.stl',    torsoGroup,        matShellPrimary, [0, 0, 0], null);
-mountSTL('cad/stl/torso_back_cover.stl', torsoGroup,        matShellAccent,  [0, 0, 0], [-56, 0, 0]);
-mountSTL('cad/stl/neck_gimbal.stl',      headYawJoint,      matShellAccent,  [0, 0, 0], null);
-mountSTL('cad/stl/head_shell.stl',       headPitchJoint,    matShellPrimary, [0, 0, 0], null);
-mountSTL('cad/stl/head_visor.stl',       headPitchJoint,    matVisor,        [0, 0, 0], [38, 0, 0]);
-mountSTL('cad/stl/arm_link_left.stl',    lShoulderJoint,    matShellPrimary, [0, 0, 0], null);
-mountSTL('cad/stl/arm_link_right.stl',   rShoulderJoint,    matShellPrimary, [0, 0, 0], null);
+// Left & Right Leg STLs (cached — zero duplicate HTTP fetches!)
+mountSTL('cad/stl/hip_clevis_left.stl',   leftLeg.hipRoll,    mats.shellAccent,  [0, 3.0, -18.0],   null);
+mountSTL('cad/stl/leg_link.stl',          leftLeg.hipPitch,   mats.shellPrimary, [0, 0, -88.0],     null);
+mountSTL('cad/stl/ankle_clevis.stl',      leftLeg.anklePitch, mats.shellAccent,  [0, 0, 0],         null);
+mountSTL('cad/stl/foot_sole.stl',         leftLeg.ankleRoll,  mats.shellPrimary, [0, 0, -18.0],     null);
 
-// Left Leg STLs (local origins match rnv1_params.scad to 0.01mm!)
-mountSTL('cad/stl/hip_clevis_left.stl',  leftLeg.hipRoll,   matShellAccent,  [0, 3.0, -18.0], null);
-mountSTL('cad/stl/leg_link.stl',         leftLeg.hipPitch,  matShellPrimary, [0, 0, -88.0],   null);
-mountSTL('cad/stl/ankle_clevis.stl',     leftLeg.anklePitch,matShellAccent,  [0, 0, 0],       null);
-mountSTL('cad/stl/foot_sole.stl',        leftLeg.ankleRoll, matShellPrimary, [0, 0, -18.0],   null);
+mountSTL('cad/stl/hip_clevis_right.stl',  rightLeg.hipRoll,   mats.shellAccent,  [0, -3.0, -18.0],  null);
+mountSTL('cad/stl/leg_link.stl',          rightLeg.hipPitch,  mats.shellPrimary, [0, 0, -88.0],     null);
+mountSTL('cad/stl/ankle_clevis.stl',      rightLeg.anklePitch,mats.shellAccent,  [0, 0, 0],         null);
+mountSTL('cad/stl/foot_sole.stl',         rightLeg.ankleRoll, mats.shellPrimary, [0, 0, -18.0],     null);
 
-// Right Leg STLs
-mountSTL('cad/stl/hip_clevis_right.stl', rightLeg.hipRoll,  matShellAccent,  [0, -3.0, -18.0], null);
-mountSTL('cad/stl/leg_link.stl',         rightLeg.hipPitch, matShellPrimary, [0, 0, -88.0],    null);
-mountSTL('cad/stl/ankle_clevis.stl',     rightLeg.anklePitch,matShellAccent, [0, 0, 0],        null);
-mountSTL('cad/stl/foot_sole.stl',        rightLeg.ankleRoll,matShellPrimary, [0, 0, -18.0],    null);
-
-// --- Interactive UI Controls Wiring (Zero Text in Viewport) ---
+// ============================================================================
+// PURE ICON-ONLY VIEWPORT CONTROLS & MULTI-STAGE ANATOMY MODES
+// ============================================================================
 let isPlaying = true;
-let isXray = false;
+let xrayStage = 0; // 0: Solid Shell, 1: Ghost X-Ray + Transparent Servo Gearboxes, 2: Naked Mechatronics Skeleton
 let showSensors = true;
 let explodeFactor = 0.0;
 let simTime = 0.0;
 
 const btnPlay      = document.getElementById('btn-play');
 const btnXray      = document.getElementById('btn-xray');
+const btnCutaway   = document.getElementById('btn-cutaway');
 const btnEdges     = document.getElementById('btn-edges');
 const btnSensors   = document.getElementById('btn-sensors');
 const btnView      = document.getElementById('btn-view');
@@ -478,18 +563,56 @@ const btnExplode   = document.getElementById('btn-explode-toggle');
 const sliderExp    = document.getElementById('slider-explode');
 const specDrawer   = document.getElementById('spec-drawer');
 
-function setExplode(val01) {
-  explodeFactor = Math.max(0, Math.min(1, val01));
-  sliderExp.value = String(Math.round(explodeFactor * 100));
-  btnExplode.classList.toggle('is-active', explodeFactor > 0.02);
-  if (explodeFactor > 0.02 && isPlaying) {
-    isPlaying = false;
-    btnPlay.classList.remove('is-active');
-    resetPoseToNeutral();
+function applyXrayStage(stage) {
+  xrayStage = ((stage % 3) + 3) % 3;
+  btnXray.classList.toggle('is-active', xrayStage > 0);
+  btnXray.dataset.stage = String(xrayStage);
+
+  const shellsVisible = (xrayStage < 2);
+  for (const m of shellMeshes) m.visible = shellsVisible;
+
+  const isGhost = (xrayStage === 1);
+  for (const sm of [mats.shellPrimary, mats.shellAccent]) {
+    sm.transparent = isGhost;
+    sm.opacity = isGhost ? 0.16 : 1.0;
+    sm.depthWrite = !isGhost;
+    sm.needsUpdate = true;
   }
-  for (const item of explodeEntries) {
-    item.obj.position.copy(item.basePos).addScaledVector(item.explodeDir, explodeFactor);
+  mats.visor.transparent = isGhost;
+  mats.visor.opacity = isGhost ? 0.22 : 1.0;
+  mats.visor.depthWrite = !isGhost;
+  mats.visor.needsUpdate = true;
+
+  // Reveal internal 4-stage metal gear train & coreless DC motor inside MG90S servos in X-Ray / Skeleton modes!
+  const servoTransparent = (xrayStage >= 1);
+  mats.servoMG90S.transparent = servoTransparent;
+  mats.servoMG90S.opacity = (xrayStage === 1) ? 0.24 : (xrayStage === 2 ? 0.34 : 1.0);
+  mats.servoMG90S.depthWrite = !servoTransparent;
+  mats.servoMG90S.needsUpdate = true;
+
+  mats.servoSG90.opacity = servoTransparent ? 0.26 : 0.72;
+  mats.servoSG90.depthWrite = !servoTransparent;
+  mats.servoSG90.needsUpdate = true;
+}
+
+function applyCutawayMode(mode) {
+  cutawayMode = ((mode % 4) + 4) % 4;
+  activeSectionPlanes.length = 0;
+  if (cutawayMode === 1) activeSectionPlanes.push(PLANE_SAGITTAL);
+  else if (cutawayMode === 2) activeSectionPlanes.push(PLANE_CORONAL);
+  else if (cutawayMode === 3) activeSectionPlanes.push(PLANE_AXIAL);
+
+  if (btnCutaway) {
+    btnCutaway.classList.toggle('is-active', cutawayMode > 0);
+    btnCutaway.dataset.mode = String(cutawayMode);
   }
+}
+
+function applyEdgesMode(enabled) {
+  showEdges = enabled;
+  btnEdges.classList.toggle('is-active', showEdges);
+  for (const l of edgeLines) l.visible = showEdges;
+  for (const km of kinematicMarkers) km.visible = showEdges;
 }
 
 function resetPoseToNeutral() {
@@ -503,28 +626,57 @@ function resetPoseToNeutral() {
   headYawJoint.rotation.z = 0; headPitchJoint.rotation.y = 0;
 }
 
+function smoothStep01(x) {
+  const t = Math.max(0, Math.min(1, x));
+  return t * t * (3.0 - 2.0 * t);
+}
+
+function setExplode(val01) {
+  explodeFactor = Math.max(0, Math.min(1, val01));
+  sliderExp.value = String(Math.round(explodeFactor * 100));
+  btnExplode.classList.toggle('is-active', explodeFactor > 0.02);
+
+  if (explodeFactor > 0.02 && isPlaying) {
+    isPlaying = false;
+    btnPlay.classList.remove('is-active');
+    resetPoseToNeutral();
+  }
+
+  // Stage 1 (0..0.62): Sub-assemblies & service covers separate
+  // Stage 2 (0.35..1.0): Individual servos, horns, M2 bolts, bushings, cells & pads extract coaxially!
+  const tStage1 = smoothStep01(explodeFactor / 0.62);
+  const tStage2 = smoothStep01((explodeFactor - 0.35) / 0.65);
+
+  for (const item of explodeEntries) {
+    const f = item.stage === 2 ? tStage2 : tStage1;
+    item.obj.position.copy(item.basePos).addScaledVector(item.explodeDir, f);
+    if (item.witnessLine && item.witnessAttr) {
+      const showW = f > 0.03;
+      item.witnessLine.visible = showW;
+      if (showW) {
+        item.witnessAttr.setXYZ(1, item.obj.position.x, item.obj.position.y, item.obj.position.z);
+        item.witnessAttr.needsUpdate = true;
+        item.witnessLine.computeLineDistances();
+      }
+    }
+  }
+
+  // Hide flexible wire harnesses cleanly during wide explosion so mechanical coaxial lines stay crystal clear
+  const showHarness = explodeFactor < 0.22;
+  for (const hg of harnessGroups) hg.visible = showHarness;
+}
+
 btnPlay.addEventListener('click', () => {
   isPlaying = !isPlaying;
   btnPlay.classList.toggle('is-active', isPlaying);
   if (isPlaying && explodeFactor > 0.0) setExplode(0.0);
 });
 
-btnXray.addEventListener('click', () => {
-  isXray = !isXray;
-  btnXray.classList.toggle('is-active', isXray);
-  for (const m of shellMaterials) {
-    m.transparent = isXray;
-    m.opacity = isXray ? 0.22 : 1.0;
-    m.depthWrite = !isXray;
-    m.needsUpdate = true;
-  }
-});
-
-btnEdges.addEventListener('click', () => {
-  showEdges = !showEdges;
-  btnEdges.classList.toggle('is-active', showEdges);
-  for (const l of edgeLines) l.visible = showEdges;
-});
+btnXray.addEventListener('click', () => applyXrayStage(xrayStage + 1));
+if (btnCutaway) {
+  btnCutaway.addEventListener('click', () => applyCutawayMode(cutawayMode + 1));
+}
+btnEdges.addEventListener('click', () => applyEdgesMode(!showEdges));
 
 btnSensors.addEventListener('click', () => {
   showSensors = !showSensors;
@@ -541,10 +693,15 @@ btnReset.addEventListener('click', () => {
   currentViewIdx = 0;
   applyCameraPreset(0, false);
   setExplode(0.0);
+  applyXrayStage(0);
+  applyCutawayMode(0);
+  applyEdgesMode(false);
 });
 
 btnExplode.addEventListener('click', () => {
-  setExplode(explodeFactor > 0.1 ? 0.0 : 1.0);
+  const nextExp = explodeFactor > 0.1 ? 0.0 : 1.0;
+  setExplode(nextExp);
+  applyCameraPreset(nextExp > 0.5 ? 7 : 0, false);
 });
 
 sliderExp.addEventListener('input', (e) => {
@@ -574,6 +731,33 @@ function toggleDrawer(open) {
 btnInfo.addEventListener('click', () => toggleDrawer(!specDrawer.classList.contains('is-open')));
 btnCloseInfo.addEventListener('click', () => toggleDrawer(false));
 
+// Interactive Subsystem Anatomy Focus Preset Trigger (callable from inside #spec-drawer)
+const ANATOMY_PRESETS = {
+  sagittal_cut: { view: 2, xray: 0, cutaway: 1, explode: 0.0,  edges: true  },
+  xray_gears:   { view: 0, xray: 1, cutaway: 0, explode: 0.0,  edges: true  },
+  naked_core:   { view: 0, xray: 2, cutaway: 0, explode: 0.0,  edges: false },
+  head_ai:      { view: 4, xray: 1, cutaway: 1, explode: 0.0,  edges: false },
+  torso_ctrl:   { view: 5, xray: 1, cutaway: 2, explode: 0.0,  edges: true  },
+  power_2s:     { view: 3, xray: 1, cutaway: 0, explode: 0.35, edges: false },
+  ankle_mech:   { view: 6, xray: 1, cutaway: 0, explode: 0.55, edges: true  },
+  full_explode: { view: 7, xray: 0, cutaway: 0, explode: 1.0,  edges: false },
+};
+
+document.querySelectorAll('[data-anatomy-preset]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const key = btn.getAttribute('data-anatomy-preset');
+    const cfg = ANATOMY_PRESETS[key];
+    if (!cfg) return;
+    currentViewIdx = cfg.view;
+    applyCameraPreset(cfg.view, false);
+    applyXrayStage(cfg.xray);
+    applyCutawayMode(cfg.cutaway);
+    applyEdgesMode(cfg.edges);
+    setExplode(cfg.explode);
+    if (window.innerWidth < 760) toggleDrawer(false);
+  });
+});
+
 // Populate Explanation Drawer Tables Dynamically from Verified Data (window.RNV1_DATA)
 function populateExplanationDrawer() {
   const data = window.RNV1_DATA;
@@ -589,9 +773,9 @@ function populateExplanationDrawer() {
     policyEl.innerHTML = `
       <table class="spec-table">
         <tbody>
-          <tr><th>学習ソース</th><td>${p.training_origin}</td></tr>
+          <tr><th>学習・最適化</th><td>${p.training_origin}</td></tr>
           <tr><th>ネットワーク構成</th><td><code>${p.architecture}</code>（${p.control_hz} Hz・残差スケール ${p.residual_scale}）</td></tr>
-          <tr><th>パラメータ / Flash</th><td>${p.total_params.toLocaleString()} params（MLP有効密度 ${p.mlp_density_pct}% / ${(p.flash_bytes / 1024).toFixed(1)} KiB（${p.flash_bytes.toLocaleString()} B）・${p.macs_per_step.toLocaleString()} MACs）</td></tr>
+          <tr><th>パラメータ / Flash</th><td>${p.total_params.toLocaleString()} params（${(p.flash_bytes / 1024).toFixed(1)} KiB [${p.flash_bytes.toLocaleString()} B]・4-way SIMD展開 ${p.macs_per_step.toLocaleString()} MACs）</td></tr>
           <tr><th>組込CPG周期</th><td>${p.cpg_freq_hz} Hz（roll ${p.cpg_roll_amp_rad} rad / stride ${p.cpg_stride_amp_rad} rad）</td></tr>
           <tr><th>実物理歩行評価</th><td>${replayMetric}</td></tr>
         </tbody>
@@ -647,7 +831,7 @@ function populateExplanationDrawer() {
       `;
     }).join('');
     simEl.innerHTML = `
-      <p>全 <strong>${data.verification.passed_suites} / ${data.verification.total_suites}</strong> 検証スイート合格（MuJoCo / PyBullet / OpenSCAD+Trimesh / SciPy FEA・回路・熱 / g++ C++ビット完全一致）。</p>
+      <p>全 <strong>${data.verification.passed_suites} / ${data.verification.total_suites}</strong> 検証スイート合格（MuJoCo 4.0.1 / PyBullet 3.2.7 / OpenSCAD+Trimesh / SciPy FEA・回路・熱 / g++ C++ビット完全一致）。</p>
       <table class="spec-table"><tbody>${sRows}</tbody></table>
     `;
   }
@@ -670,9 +854,8 @@ function applyMuJoCoReplay(tSec) {
   const a = frames[i0], b = frames[i1];
   const lerp = (x, y) => x + (y - x) * u;
 
-  // Keep robot centered horizontally in studio CAD view while preserving real vertical bounce & attitude!
   torsoGroup.position.set(0, 0, lerp(a.pos[2], b.pos[2]));
-  tmpQ1.set(a.quat[1], a.quat[2], a.quat[3], a.quat[0]); // MuJoCo [w,x,y,z] -> Three [x,y,z,w]
+  tmpQ1.set(a.quat[1], a.quat[2], a.quat[3], a.quat[0]);
   tmpQ2.set(b.quat[1], b.quat[2], b.quat[3], b.quat[0]);
   torsoGroup.quaternion.copy(tmpQ1).slerp(tmpQ2, u);
 
@@ -703,9 +886,10 @@ function animate() {
   }
 
   if (camLerping) {
-    camera.position.lerp(targetCamPos, 0.12);
-    controls.target.lerp(targetLookAt, 0.12);
-    if (camera.position.distanceTo(targetCamPos) < 0.002) camLerping = false;
+    const k = 1.0 - Math.exp(-9.5 * dt);
+    camera.position.lerp(targetCamPos, k);
+    controls.target.lerp(targetLookAt, k);
+    if (camera.position.distanceTo(targetCamPos) < 0.0015) camLerping = false;
   }
   controls.update();
   renderer.render(scene, camera);
