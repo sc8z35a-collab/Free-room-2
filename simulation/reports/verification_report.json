@@ -1,6 +1,6 @@
 {
   "project": "RNV1 (Robotic Neural Vector 1)",
-  "elapsed_s": 16.5,
+  "elapsed_s": 19.97,
   "passed_suites": 12,
   "total_suites": 12,
   "all_100pct_passed": true,
@@ -162,11 +162,12 @@
       }
     },
     {
-      "suite": "12_Colab_A100_Notebook_and_WebCAD_UI",
+      "suite": "12_Colab_A100_LastBench_v1_and_WebCAD_UI",
       "passed": true,
       "metrics": {
         "colab_nb_valid_schema_and_ast": true,
         "colab_a100_mjx_rnv1_configured": true,
+        "last_bench_v1_8192env_300m_15suites_ok": true,
         "web_ui_js_syntax_ok": true,
         "pure_white_ffffff_background": true,
         "zero_text_outside_explanation_drawer": true,

@@ -191,9 +191,24 @@
       </section>
 
       <section class="spec-section">
+        <h2>LAST BENCH v2 (Hyper-50×) — A100 1,000Hz 12大物理法則・オンラインRMA環境適応・全身3D VFH+障害物回避 ＆ 18種耐久テスト</h2>
+        <p>
+          前作を50倍以上の数値・物理精度で凌駕する <strong><code>1,000 Hz</code>（<code>implicitfast</code>＋真の3D楕円摩擦錐 <code>cone="elliptic"</code>＋<code>noslip=4</code>）× <code>8,192</code> 並列環境 × <code>3.0億</code> 制御ステップ（<code>60億</code> 高精度物理サブステップ / bfloat16 Tensor Core）</strong> の極限スイートです。全65実部品の <strong>Steiner平行軸完全慣性テンソル（<code>431.05 g</code> 完全一致）</strong>、12大現実物理法則（2S Li-ion放電＋Mini560 5A＆<code>1000µF</code>過渡電圧降下、銅巻線発熱、Back-EMF、100Hz <code>2.44µs</code> 12bit PWM、バックラッシュ、<code>20-40ms</code>遅延、10Hz DLPF <code>MPU-6050</code>、<strong>歩行中リアルタイム環境急変</strong>、<strong>3D移動障害物＆机端崖</strong>）、<strong>2段階オンラインRMA（Teacher <code>24→64→8</code> → 生徒1D-TCN <code>210→64→32→8</code> DAgger蒸留＋実機同一 <code>OnlineEnvAdapter</code>）</strong>、<strong>25セクタVFH+障害物回避（横ステップ・移動体予測・U字脱出・崖緊急停止）</strong>、および <strong>全18種ベンチマーク（<code>B01</code>〜<code>B18</code>・全身3D MuJoCo物理スラローム＋Colab内 <code>g++ -Werror</code>＋2画面分割HD動画付）</strong> をワンクリックで実行できます。
+        </p>
+        <div class="colab-launch-row">
+          <a class="colab-launch-btn is-primary" href="https://colab.research.google.com/github/sc8z35a-collab/Free-room-2/blob/main/training/RNV1_Last_Bench_v1.ipynb" target="_blank" rel="noopener noreferrer">
+            ▶ Google Colab (A100 GPU) で LAST BENCH v2 (Hyper-50×) をワンクリック起動
+          </a>
+          <a class="colab-launch-btn" href="https://colab.research.google.com/github/sc8z35a-collab/Free-room-2/blob/main/training/RNV1_Colab_A100_Training.ipynb" target="_blank" rel="noopener noreferrer">
+            前作 標準A100学習ノートブックを開く
+          </a>
+        </div>
+      </section>
+
+      <section class="spec-section">
         <h2>A100 強化学習 ＋ 左右対称マルチエンジン最適化学習済方策（12/12 100% PASS）</h2>
         <p>
-          Google Colab Pro（NVIDIA A100 GPU）＋ <strong>MuJoCo MJX（Pure-JAX 4,096並列環境）</strong>で学習した <code>RNV1_Trained_Bundle.zip</code> に対し、二足歩行の厳密な<strong>左右鏡映対称（Bilateral Equivariance）射影＋MuJoCo 4.0.1 / PyBullet 3.2.7 交差共最適化</strong>および ESP32-S3 向け <strong>16-byte SIMDアライメント＋4-way FPUパイプライン展開</strong>を実施済みです。
+          Google Colab Pro（NVIDIA A100 GPU）＋ <strong>MuJoCo MJX（Pure-JAX 並列環境）</strong>で学習した <code>RNV1_Trained_Bundle.zip</code> に対し、二足歩行の厳密な<strong>左右鏡映対称（Bilateral Equivariance）射影＋MuJoCo 4.0.1 / PyBullet 3.2.7 交差共最適化</strong>および ESP32-S3 向け <strong>16-byte SIMDアライメント＋4-way FPUパイプライン展開</strong>を実施済みです。
         </p>
         <div id="policy-summary-container"></div>
         <div id="policy-video-container" class="spec-video-wrap" hidden>
