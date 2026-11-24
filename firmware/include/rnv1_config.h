@@ -31,8 +31,8 @@
 #define VBAT_CUTOFF_V       6.40f   // Safe posture sit-down + disable PCA9685 OE#
 #define FALL_TILT_MAX_RAD   0.785f  // 45 deg safety fall detector
 
-// --- Servo Calibration (MG90S / SG90 @ 50Hz PWM, 500..2500 us = -90..+90 deg) ---
-#define SERVO_PWM_FREQ_HZ   50.0f
+// --- Servo Calibration (MG90S / SG90 @ 100Hz 12-bit PCA9685 => 2.4414 us/tick, 500..2500 us = -90..+90 deg) ---
+#define SERVO_PWM_FREQ_HZ   100.0f
 #define SERVO_NEUTRAL_US    1500.0f
 #define SERVO_US_PER_RAD    636.61977f  // 1000 us / (pi/2)
 

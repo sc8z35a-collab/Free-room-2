@@ -30,8 +30,8 @@ static bool  g_emergency_stop = false;
 static uint16_t rad_to_pca9685_tick(float rad) {
     float us = SERVO_NEUTRAL_US + rad * SERVO_US_PER_RAD;
     us = rnv1::clampf(us, 550.0f, 2450.0f);
-    // 12-bit PCA9685 @ 50Hz => 20,000 us / 4096 = 4.8828 us per tick
-    return static_cast<uint16_t>(us * (4096.0f / 20000.0f));
+    // 12-bit PCA9685 @ SERVO_PWM_FREQ_HZ (100Hz => 2.4414 us/tick, unbiased nearest-tick rounding)
+    return static_cast<uint16_t>(std::lroundf(us * (4096.0f * SERVO_PWM_FREQ_HZ / 1000000.0f)));
 }
 
 static void speak_offline_japanese(const char* romaji_phrase) {
@@ -110,7 +110,9 @@ static void task_locomotion_core1(void* /*pv*/) {
         obs_aligned[35] = rnv1::clampf(tof_m / 1.5f, 0.0f, 1.0f);
         (void)obs;
 
-        rnv1::infer_policy(obs_aligned, phi, vx, vy, yaw, head_scan, target_q);
+        static rnv1::OnlineEnvAdapter env_adapter;
+        const float gyro_rad[3] = { gx, gy, gz };
+        rnv1::infer_policy_adaptive(obs_aligned, phi, vx, vy, yaw, head_scan, env_adapter, proj_g, gyro_rad, target_q);
 
         std::memcpy(prev2_act, prev_act, sizeof(prev_act));
         std::memcpy(prev_act, target_q, sizeof(target_q));
@@ -150,12 +152,19 @@ static void task_perception_core0(void* /*pv*/) {
             warn_batt = g_low_batt_warn;
             portEXIT_CRITICAL(&g_mux);
 
-            planner.update_tof_ray(hy, hp, d_m);
+            planner.update_tof_ray(hy, hp, d_m, 0.04f);
             float vx, vy, yaw;
             planner.compute_autonomous_cmd(vx, vy, yaw);
+            planner.shift_odometry(yaw * 0.04f, 0.04f);
 
             portENTER_CRITICAL(&g_mux);
-            g_cmd_vx = vx; g_cmd_vy = vy; g_cmd_yaw = yaw;
+            if (planner.cliff_detected || vx <= 0.0f) {
+                g_cmd_vx = vx; g_cmd_vy = vy; g_cmd_yaw = yaw; // Instant halt/reverse on cliff or close obstacle
+            } else {
+                g_cmd_vx  = 0.75f * g_cmd_vx  + 0.25f * vx;
+                g_cmd_vy  = 0.75f * g_cmd_vy  + 0.25f * vy;
+                g_cmd_yaw = 0.75f * g_cmd_yaw + 0.25f * yaw;
+            }
             portEXIT_CRITICAL(&g_mux);
 
             // Autonomous vocal status announcements when encountering cliffs, obstacles, or low battery
@@ -197,6 +206,7 @@ void setup() {
     imu.initialize();
     imu.setFullScaleAccelRange(MPU6050_ACCEL_FS_8);
     imu.setFullScaleGyroRange(MPU6050_GYRO_FS_1000);
+    imu.setDLPFMode(MPU6050_DLPF_BW_10); // 10Hz silicon anti-alias LPF rejects foot-impact shock
 
     tof.setTimeout(100);
     tof.init();

@@ -857,22 +857,47 @@ def run_suite_11_bom_budget_mass_audit() -> dict:
 
 
 def run_suite_12_colab_and_web_cad_ui() -> dict:
-    """Suite 12: Colab Pro A100 RNV1 Notebook Schema/AST Validation & Pure-White Zero-Text 3D CAD UI Audit."""
-    # 1. Colab Notebook Validation
-    nb_path = ROOT / "training/RNV1_Colab_A100_Training.ipynb"
-    nb = nbformat.read(str(nb_path), as_version=4)
-    nbformat.validate(nb)
-    code_cells = [c for c in nb.cells if c.cell_type == "code"]
-    syntax_ok = True
-    full_code = ""
-    for c in code_cells:
-        try:
-            ast.parse(c.source)
-            full_code += "\n" + c.source
-        except SyntaxError:
-            syntax_ok = False
-    has_rnv1 = ('TRAINING_VERSION = "RNV1"' in full_code and "rnv1_policy_weights.h" in full_code and "mjx" in full_code)
-    has_a100_meta = (nb.metadata.get("colab", {}).get("gpuType") == "A100")
+    """Suite 12: Colab Pro A100 RNV1 & Last Bench v1 Notebook Validation + Pure-White Zero-Text 3D CAD UI Audit."""
+    def _audit_nb(path: Path) -> tuple[bool, str, dict]:
+        if not path.exists():
+            return False, "", {}
+        nb_obj = nbformat.read(str(path), as_version=4)
+        nbformat.validate(nb_obj)
+        c_cells = [c for c in nb_obj.cells if c.cell_type == "code"]
+        ok = len(c_cells) >= 6
+        joined = ""
+        for c in c_cells:
+            try:
+                ast.parse(c.source)
+                joined += "\n" + c.source
+            except SyntaxError:
+                ok = False
+        return ok, joined, nb_obj.metadata
+
+    # 1a. Baseline A100 Notebook Validation
+    syntax_v1, code_v1, meta_v1 = _audit_nb(ROOT / "training/RNV1_Colab_A100_Training.ipynb")
+    has_rnv1 = ('TRAINING_VERSION = "RNV1"' in code_v1 and "rnv1_policy_weights.h" in code_v1 and "mjx" in code_v1)
+    has_a100_meta = (meta_v1.get("colab", {}).get("gpuType") == "A100")
+
+    # 1b. Extreme Multiphysics LAST BENCH v1 Notebook Validation
+    syntax_lb, code_lb, meta_lb = _audit_nb(ROOT / "training/RNV1_Last_Bench_v1.ipynb")
+    lb_pure_jax = ("import flax" not in code_lb and "import optax" not in code_lb)
+    lb_features = (
+        'BENCH_VERSION = "RNV1_LAST_BENCH_v2_HYPER50X"' in code_lb
+        and "fullinertia=" in code_lb
+        and "NUM_ENVS = 8192" in code_lb
+        and "TOTAL_TIMESTEPS = 300_000_000" in code_lb
+        and "B15" in code_lb
+        and "B18" in code_lb
+        and 'timestep="0.001"' in code_lb
+        and 'cone="elliptic"' in code_lb
+        and 'noslip_iterations="4"' in code_lb
+        and "rma_dagger_step" in code_lb
+        and "SpatialPlannerVFH" in code_lb
+        and "RNV1_Last_Bench_v1_Bundle.zip" in code_lb
+        and meta_lb.get("colab", {}).get("gpuType") == "A100"
+    )
+    last_bench_ok = syntax_lb and lb_pure_jax and lb_features
 
     # 2. Web 3D CAD UI Validation
     idx_path = ROOT / "index.html"
@@ -905,9 +930,10 @@ def run_suite_12_colab_and_web_cad_ui() -> dict:
         zero_ui_text = (len(visible_text) == 0)
 
     passed = (
-        syntax_ok
+        syntax_v1
         and has_rnv1
         and has_a100_meta
+        and last_bench_ok
         and ui_exists
         and js_ok
         and pure_white_bg
@@ -915,11 +941,12 @@ def run_suite_12_colab_and_web_cad_ui() -> dict:
         and mobile_landscape_css
     )
     return {
-        "suite": "12_Colab_A100_Notebook_and_WebCAD_UI",
+        "suite": "12_Colab_A100_LastBench_v1_and_WebCAD_UI",
         "passed": passed,
         "metrics": {
-            "colab_nb_valid_schema_and_ast": syntax_ok,
+            "colab_nb_valid_schema_and_ast": syntax_v1 and syntax_lb,
             "colab_a100_mjx_rnv1_configured": has_rnv1 and has_a100_meta,
+            "last_bench_v1_8192env_300m_15suites_ok": last_bench_ok,
             "web_ui_js_syntax_ok": js_ok,
             "pure_white_ffffff_background": pure_white_bg,
             "zero_text_outside_explanation_drawer": zero_ui_text,

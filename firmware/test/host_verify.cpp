@@ -55,6 +55,21 @@ int main() {
     bool cliff_ok = (sp.cliff_detected && cvx < 0.0f);
     std::printf("SPATIAL_OK %d CLIFF_OK %d\n", obs_avoid_ok ? 1 : 0, cliff_ok ? 1 : 0);
 
+    // 3b. Verify OnlineEnvAdapter quiet-stand zero-drift & stumble-catch double-support reflex
+    rnv1::OnlineEnvAdapter env_ad;
+    float q_stand[RNV1_ACT_DIM] = {0};
+    const float pg_stand[3] = {0.0f, 0.0f, -1.0f};
+    const float gy_zero[3]  = {0.0f, 0.0f, 0.0f};
+    env_ad.apply(pg_stand, gy_zero, 0.0f, 0.0f, 0.0f, q_stand);
+    float stand_drift = 0.0f;
+    for (int i = 0; i < RNV1_ACT_DIM; ++i) stand_drift += std::fabs(q_stand[i]);
+    float q_push[RNV1_ACT_DIM] = {0.2f, 0.2f, -0.2f, -0.2f, 0.2f, -0.2f, 0.2f, -0.2f, 0.0f, 0.0f, 0.0f, 0.0f};
+    const float pg_tilt[3] = {0.32f, -0.22f, -0.92f};
+    const float gy_push[3] = {2.4f, 2.2f, 0.0f};
+    env_ad.apply(pg_tilt, gy_push, 0.12f, 0.0f, 0.0f, q_push);
+    bool adapter_ok = (stand_drift < 1e-7f) && (std::fabs(q_push[2] - (-0.2f)) > 0.05f);
+    std::printf("ADAPTER_OK %d STAND_DRIFT %.2e\n", adapter_ok ? 1 : 0, stand_drift);
+
     // 4. Verify Offline Japanese Formant Speech Synthesis (16kHz PCM energy & non-clipping)
     static int16_t pcm[16000];
     int n_samp = rnv1::FormantVoiceSynth::synthesize_romaji("konnichiwa", pcm, 16000, 16000);
@@ -82,5 +97,5 @@ int main() {
                 us_per_call,
                 RNV1_OBS_DIM * RNV1_H1_DIM + RNV1_H1_DIM * RNV1_H2_DIM + RNV1_H2_DIM * RNV1_ACT_DIM,
                 sizeof(RNV1_W1) + sizeof(RNV1_B1) + sizeof(RNV1_W2) + sizeof(RNV1_B2) + sizeof(RNV1_W3) + sizeof(RNV1_B3) + sizeof(RNV1_CPG));
-    return (obs_avoid_ok && cliff_ok && n_samp > 5000 && rms > 500.0) ? 0 : 1;
+    return (obs_avoid_ok && cliff_ok && adapter_ok && n_samp > 5000 && rms > 500.0) ? 0 : 1;
 }
