@@ -16,6 +16,7 @@ import {
   createDualBuckPowerNodes,
   createAudioSystemNodes,
   createBattery2SAndRearIO,
+  createSiliconeTreadPad,
   createCompleteWiringHarnesses,
   attachKinematicAndCoMGuides,
 } from './rnv1-anatomy.js';
@@ -54,15 +55,14 @@ keyLight.shadow.camera.bottom = -sc;
 keyLight.shadow.bias = -0.0004;
 scene.add(keyLight);
 
-const fillLight = new THREE.DirectionalLight(0xf2f6ff, 0.62);
+const fillLight = new THREE.DirectionalLight(0xf2f6ff, 0.65);
 fillLight.position.set(-0.65, 0.45, -0.45);
 scene.add(fillLight);
 
-const rimLight = new THREE.DirectionalLight(0xffffff, 0.52);
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.54);
 rimLight.position.set(-0.20, 0.65, 0.70);
 scene.add(rimLight);
 
-// Invisible Shadow-Catcher Plane on Pure White Studio Floor (Y = 0)
 const shadowFloor = new THREE.Mesh(
   new THREE.PlaneGeometry(2.6, 2.6),
   new THREE.ShadowMaterial({ opacity: 0.13 })
@@ -73,23 +73,22 @@ shadowFloor.receiveShadow = true;
 scene.add(shadowFloor);
 
 // --- Camera & Damped OrbitControls ---
-const camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.008, 20);
+const camera = new THREE.PerspectiveCamera(34, window.innerWidth / window.innerHeight, 0.006, 20);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.075;
-controls.minDistance = 0.11;
+controls.minDistance = 0.085;
 controls.maxDistance = 1.35;
 controls.maxPolarAngle = Math.PI * 0.495;
 
-// Note: OpenSCAD (+X fwd, +Y left, +Z up) mapped via worldRobot.rotation.x = -PI/2 -> Three.js (+X fwd, +Y up, -Z left / +Z right)
 const VIEW_PRESETS = [
   { pos: [0.38, 0.23, 0.38],  target: [0.0, 0.118, 0.0] },    // 0: 3/4 Isometric Hero
   { pos: [0.46, 0.13, 0.00],  target: [0.0, 0.118, 0.0] },    // 1: Front Elevation
   { pos: [0.02, 0.135, 0.46], target: [0.0, 0.118, 0.0] },    // 2: Right Sagittal Profile
-  { pos: [-0.44, 0.15, 0.08], target: [0.0, 0.128, 0.0] },    // 3: Rear Battery / BMS / USB-C Service Bay
-  { pos: [0.16, 0.232, 0.14], target: [0.008, 0.214, 0.0] },  // 4: Macro — 2-DOF Active Spatial Head & XIAO ESP32S3
-  { pos: [0.20, 0.172, 0.20], target: [0.0, 0.150, 0.0] },    // 5: Macro — Torso PCA9685 / Dual Bucks / CoM IMU
-  { pos: [0.18, 0.058, 0.18], target: [0.005, 0.028, 0.0] },  // 6: Macro — Coaxial 2-DOF Universal Ankle & Dual-Shear Clevis
+  { pos: [-0.40, 0.15, 0.08], target: [0.0, 0.135, 0.0] },    // 3: Rear Battery / BMS / USB-C Service Bay
+  { pos: [0.15, 0.232, 0.13], target: [0.008, 0.214, 0.0] },  // 4: Macro — 2-DOF Active Spatial Head & XIAO SoC / Lens Stack
+  { pos: [0.18, 0.168, 0.18], target: [0.002, 0.148, 0.0] },  // 5: Macro — Torso Silkscreened PCA9685 / Dual Bucks / CoM IMU
+  { pos: [0.17, 0.038, 0.17], target: [0.005, 0.002, 0.0] },  // 6: Macro — Coaxial 2-DOF Universal Ankle & Involute Gear Train
   { pos: [0.64, 0.34, 0.64],  target: [0.0, 0.125, 0.0] },    // 7: Wide Studio Framing for Full 2-Stage Exploded View
 ];
 let currentViewIdx = 0;
@@ -112,14 +111,16 @@ function applyCameraPreset(idx, instant = false) {
 applyCameraPreset(0, true);
 controls.addEventListener('start', () => { camLerping = false; });
 
-// --- Dynamic Selective Cross-Section Cutaway Planes (Slices Shells & Servo Cases, Keeps Internals Whole!) ---
+// --- Dynamic Selective Cross-Section Cutaway Planes + CT-Style Scrubber ---
 const activeSectionPlanes = [];
-const PLANE_SAGITTAL = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0.002);   // Slices right half (Z_three > +2mm)
-const PLANE_CORONAL  = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0.003);   // Slices front half (X_three > +3mm)
-const PLANE_AXIAL    = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.168);   // Horizontal top-down torso floorplan cut
-let cutawayMode = 0; // 0: Off, 1: Sagittal, 2: Coronal, 3: Axial
+const PLANE_SAGITTAL = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0.001);
+const PLANE_CORONAL  = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0.003);
+const PLANE_AXIAL    = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.168);
+let cutawayMode = 0;      // 0: Off, 1: Sagittal, 2: Coronal, 3: Axial
+let sectionOffsetNorm = 0; // -1.0 .. +1.0 continuous CT slice scrubber
 
-const mats = createAnatomyMaterials(activeSectionPlanes);
+const maxAniso = Math.min(renderer.capabilities.getMaxAnisotropy() || 4, 8);
+const mats = createAnatomyMaterials(activeSectionPlanes, maxAniso);
 const edgeLineMat = new THREE.LineBasicMaterial({
   color: 0x1c2430, transparent: true, opacity: 0.26, clippingPlanes: activeSectionPlanes,
 });
@@ -129,7 +130,7 @@ const witnessLineMat = new THREE.LineDashedMaterial({
 
 const shellMeshes = [];
 const edgeLines = [];
-const explodeEntries = []; // { obj, basePos, explodeDir, stage, witnessLine, witnessAttr }
+const explodeEntries = [];
 const harnessGroups = [];
 
 function setOrthonormalBasis(obj, ex, ey, ez) {
@@ -171,7 +172,7 @@ worldRobot.rotation.x = -Math.PI / 2;
 scene.add(worldRobot);
 
 const torsoGroup = new THREE.Group();
-torsoGroup.position.set(0, 0, 124.0 * MM); // Global Z_HIP_ROLL = 124.0 mm
+torsoGroup.position.set(0, 0, 124.0 * MM);
 worldRobot.add(torsoGroup);
 
 // --- 1. Torso Power, Control, IMU, Audio & Rear Service Hardware ---
@@ -185,11 +186,10 @@ registerExplode(cells[1], -10,  8, 12, { stage: 2 });
 registerExplode(bmsGroup, -14,  0,  0, { stage: 2 });
 registerExplode(rearIOGroup, -44, 0, -4, { stage: 1 });
 
-// 4x M2x6 Stainless Socket-Head Cap Screws on torso_back_cover (Y = +-26mm, Z = 10mm & 48mm)
 for (const sy of [-26.0, 26.0]) {
   for (const dz of [10.0, 48.0]) {
     const bolt = createM2SocketBolt(mats, 6.5);
-    setOrthonormalBasis(bolt, [0, 1, 0], [0, 0, 1], [-1, 0, 0]); // Head faces -X, shaft threads +X into torso
+    setOrthonormalBasis(bolt, [0, 1, 0], [0, 0, 1], [-1, 0, 0]);
     bolt.position.set(-26.8 * MM, sy * MM, dz * MM);
     torsoGroup.add(bolt);
     registerExplode(bolt, -76, sy * 0.12, 0, { stage: 2 });
@@ -202,7 +202,7 @@ torsoGroup.add(pca9685Group);
 registerExplode(pca9685Group, -14, 0, 16, { stage: 1 });
 
 const imuCoMGroup = createMPU6050CoMAssembly(mats);
-imuCoMGroup.position.set(2.0 * MM, 0, 14.0 * MM); // Exact Pelvis Cross-Tie Beam CoM Mount!
+imuCoMGroup.position.set(2.0 * MM, 0, 14.0 * MM);
 torsoGroup.add(imuCoMGroup);
 registerExplode(imuCoMGroup, 14, 0, -16, { stage: 2 });
 
@@ -224,66 +224,68 @@ ampGroup.position.set(11.5 * MM, 19.5 * MM, 39.5 * MM);
 torsoGroup.add(ampGroup);
 registerExplode(ampGroup, 24, 26, 10, { stage: 2 });
 
-spkGroup.position.set(20.5 * MM, 0, 34.0 * MM); // Exact chest acoustic cavity!
+spkGroup.position.set(20.5 * MM, 0, 34.0 * MM);
 torsoGroup.add(spkGroup);
 registerExplode(spkGroup, 36, 0, 4, { stage: 1 });
 
 // --- 2. Torso-Mounted Servos (Hip Roll L/R, Shoulder L/R, Neck Pan SG90) ---
+const servoMap = {};
+
 for (const side of [1, -1]) {
   const sy = side * 23.0;
-  // Hip Roll MG90S: spline along +X at (10.8, sy, 0), body extending +Z inside pelvis bulkhead!
+  const tag = side > 0 ? 'L' : 'R';
+
   const svHipR = createPrecisionServo(mats, false);
   setOrthonormalBasis(svHipR, [0, 0, -1], [0, 1, 0], [1, 0, 0]);
   svHipR.position.set(10.8 * MM, sy * MM, 0);
   torsoGroup.add(svHipR);
   registerExplode(svHipR, 14, side * 10, 6, { stage: 2 });
+  servoMap[`hipRoll_${tag}`] = svHipR;
 
-  // Opposing Rear Pelvis Dual-Shear Bushing at (-12.5, sy, 0)
   const bushHipR = createDualShearBushing(mats);
   setOrthonormalBasis(bushHipR, [0, 1, 0], [0, 0, 1], [-1, 0, 0]);
   bushHipR.position.set(-12.5 * MM, sy * MM, 0);
   torsoGroup.add(bushHipR);
   registerExplode(bushHipR, -18, side * 10, 0, { stage: 2 });
 
-  // Shoulder MG90S: spline along side*Y at (0, side*43.2, 46.0), body along -X inside ribcage!
   const svSh = createPrecisionServo(mats, false);
   setOrthonormalBasis(svSh, [1, 0, 0], [0, 0, -side], [0, side, 0]);
   svSh.position.set(0, side * 43.2 * MM, 46.0 * MM);
   torsoGroup.add(svSh);
   registerExplode(svSh, 0, side * 16, 8, { stage: 2 });
+  servoMap[`shoulder_${tag}`] = svSh;
 }
 
-const neckPanServo = createPrecisionServo(mats, true); // Translucent SG90 CH10
+const neckPanServo = createPrecisionServo(mats, true);
 neckPanServo.position.set(0, 0, 62.2 * MM);
 torsoGroup.add(neckPanServo);
 registerExplode(neckPanServo, 0, 0, 10, { stage: 2 });
+servoMap.headYaw = neckPanServo;
 
 // --- 3. 2-DOF Active Spatial Head & Sensor Pod ---
 const headYawJoint = new THREE.Group();
-headYawJoint.position.set(0, 0, 64.0 * MM); // Global Z = 188.0 mm
+headYawJoint.position.set(0, 0, 64.0 * MM);
 torsoGroup.add(headYawJoint);
 registerExplode(headYawJoint, 0, 0, 22, { stage: 1 });
 
-// Rotating Neck Yaw SG90 Servo Horn mounted on underside of neck_gimbal
 const { group: yawHorn } = createServoHornAssembly(mats, { isSG90: true, armLenMM: 10.5 });
 setOrthonormalBasis(yawHorn, [1, 0, 0], [0, -1, 0], [0, 0, -1]);
 yawHorn.position.set(0, 0, -0.5 * MM);
 headYawJoint.add(yawHorn);
 registerExplode(yawHorn, 0, 0, -8, { stage: 2 });
 
-// Head Tilt SG90 (CH11): spline along +Y at (0, +10.8, 16.0), body extending -Z inside neck_gimbal!
 const headTiltServo = createPrecisionServo(mats, true);
 setOrthonormalBasis(headTiltServo, [0, 0, 1], [1, 0, 0], [0, 1, 0]);
 headTiltServo.position.set(0, 10.8 * MM, 16.0 * MM);
 headYawJoint.add(headTiltServo);
 registerExplode(headTiltServo, 0, 14, 0, { stage: 2 });
+servoMap.headPitch = headTiltServo;
 
 const headPitchJoint = new THREE.Group();
-headPitchJoint.position.set(0, 0, 16.0 * MM); // Global Z = 204.0 mm
+headPitchJoint.position.set(0, 0, 16.0 * MM);
 headYawJoint.add(headPitchJoint);
 registerExplode(headPitchJoint, 0, 0, 28, { stage: 1 });
 
-// Rotating Head Tilt SG90 Horn (+Y ear) & Opposing Dual-Shear Bushing (-Y ear)
 const { group: tiltHorn } = createServoHornAssembly(mats, { isSG90: true, armLenMM: 9.5 });
 setOrthonormalBasis(tiltHorn, [0, 0, 1], [1, 0, 0], [0, 1, 0]);
 tiltHorn.position.set(0, 13.4 * MM, 0);
@@ -296,18 +298,16 @@ headTiltBush.position.set(0, -13.4 * MM, 0);
 headPitchJoint.add(headTiltBush);
 registerExplode(headTiltBush, 0, -16, 0, { stage: 2 });
 
-// Internal Head Compute & Coaxial Vision/Laser Suite (XIAO ESP32S3 Sense + VL53L0X)
 const xiaoGroup = createXiaoESP32S3SenseAssembly(mats);
-xiaoGroup.position.set(9.8 * MM, 0, 15.0 * MM); // Lens apex sits coaxially in head_visor Ø8.6mm port!
+xiaoGroup.position.set(9.8 * MM, 0, 15.0 * MM);
 headPitchJoint.add(xiaoGroup);
 registerExplode(xiaoGroup, 22, 0, 10, { stage: 2 });
 
 const tofGroup = createVL53L0XAssembly(mats);
-tofGroup.position.set(18.6 * MM, 0, 5.0 * MM); // Optical apertures coaxial with head_visor Z=+5.0mm window!
+tofGroup.position.set(18.6 * MM, 0, 5.0 * MM);
 headPitchJoint.add(tofGroup);
 registerExplode(tofGroup, 30, 0, -6, { stage: 2 });
 
-// Active Spatial ToF 940nm Laser Cone & OV5640 62-deg Camera FOV Frustum
 const sensorVizGroup = new THREE.Group();
 headPitchJoint.add(sensorVizGroup);
 
@@ -359,33 +359,32 @@ function buildArmAssembly(side) {
 const lShoulderJoint = buildArmAssembly(+1);
 const rShoulderJoint = buildArmAssembly(-1);
 
-// --- 5. Coaxial 2-DOF Universal-Ankle Legs (Exact 0.01mm Spline/Horn/Bushing Alignment!) ---
+// --- 5. Coaxial 2-DOF Universal-Ankle Legs with Live Involute Gear Trains ---
 function buildLegChain(side) {
+  const tag = side > 0 ? 'L' : 'R';
   const hipRoll = new THREE.Group();
   hipRoll.position.set(0, side * 23.0 * MM, 0);
   torsoGroup.add(hipRoll);
   registerExplode(hipRoll, 0, side * 18, -14, { stage: 1 });
 
-  // Rotating Hip Roll Horn on front clevis ear (+X = +12.6mm)
   const { group: hrHorn } = createServoHornAssembly(mats, { armLenMM: 10.0 });
   setOrthonormalBasis(hrHorn, [0, 0, -1], [0, 1, 0], [1, 0, 0]);
   hrHorn.position.set(12.6 * MM, 0, 0);
   hipRoll.add(hrHorn);
   registerExplode(hrHorn, 14, 0, 0, { stage: 2 });
 
-  // Hip Pitch MG90S inside hip_clevis (spline along +Y at Z = -18mm)
   const svHipP = createPrecisionServo(mats, false);
   setOrthonormalBasis(svHipP, [0, 0, -1], [-1, 0, 0], [0, 1, 0]);
   svHipP.position.set(0, (side * 3.0 + 10.4) * MM, -18.0 * MM);
   hipRoll.add(svHipP);
   registerExplode(svHipP, 0, 14, 6, { stage: 2 });
+  servoMap[`hipPitch_${tag}`] = svHipP;
 
   const hipPitch = new THREE.Group();
   hipPitch.position.set(0, side * 3.0 * MM, -18.0 * MM);
   hipRoll.add(hipPitch);
   registerExplode(hipPitch, 0, side * 10, -18, { stage: 1 });
 
-  // Rotating Hip Pitch Horn (+Y fork) & Opposing Dual-Shear Bushing (-Y fork)
   const { group: hpHorn } = createServoHornAssembly(mats, { armLenMM: 11.0 });
   setOrthonormalBasis(hpHorn, [0, 0, -1], [-1, 0, 0], [0, 1, 0]);
   hpHorn.position.set(0, 12.5 * MM, 0);
@@ -398,19 +397,18 @@ function buildLegChain(side) {
   hipPitch.add(hpBush);
   registerExplode(hpBush, 0, -14, 0, { stage: 2 });
 
-  // Ankle Pitch MG90S at bottom of 88mm leg_link (spline along +Y at Z = -88mm)
   const svAnkP = createPrecisionServo(mats, false);
   setOrthonormalBasis(svAnkP, [0, 0, -1], [-1, 0, 0], [0, 1, 0]);
   svAnkP.position.set(0, 10.4 * MM, -88.0 * MM);
   hipPitch.add(svAnkP);
   registerExplode(svAnkP, 0, 14, 6, { stage: 2 });
+  servoMap[`anklePitch_${tag}`] = svAnkP;
 
   const anklePitch = new THREE.Group();
   anklePitch.position.set(0, 0, -88.0 * MM);
   hipPitch.add(anklePitch);
   registerExplode(anklePitch, 0, 0, -20, { stage: 1 });
 
-  // Rotating Ankle Pitch Horn (+Y ear) & Opposing Dual-Shear Bushing (-Y ear)
   const { group: apHorn } = createServoHornAssembly(mats, { armLenMM: 9.5 });
   setOrthonormalBasis(apHorn, [0, 0, 1], [1, 0, 0], [0, 1, 0]);
   apHorn.position.set(0, 12.5 * MM, 0);
@@ -423,19 +421,18 @@ function buildLegChain(side) {
   anklePitch.add(apBush);
   registerExplode(apBush, 0, -14, 0, { stage: 2 });
 
-  // Ankle Roll MG90S coaxially inside ankle_clevis (spline along +X at Z = 0)
   const svAnkR = createPrecisionServo(mats, false);
   setOrthonormalBasis(svAnkR, [0, 0, -1], [0, 1, 0], [1, 0, 0]);
   svAnkR.position.set(10.6 * MM, 0, 0);
   anklePitch.add(svAnkR);
   registerExplode(svAnkR, 14, 0, 6, { stage: 2 });
+  servoMap[`ankleRoll_${tag}`] = svAnkR;
 
   const ankleRoll = new THREE.Group();
   ankleRoll.position.set(0, 0, 0);
   anklePitch.add(ankleRoll);
   registerExplode(ankleRoll, 0, 0, -18, { stage: 1 });
 
-  // Rotating Ankle Roll Horn on front foot tower (+X = +13.0mm) & Rear Opposing Bushing (-X = -12.6mm)
   const { group: arHorn } = createServoHornAssembly(mats, { armLenMM: 10.5 });
   setOrthonormalBasis(arHorn, [0, 1, 0], [0, 0, 1], [1, 0, 0]);
   arHorn.position.set(13.0 * MM, 0, 0);
@@ -448,10 +445,9 @@ function buildLegChain(side) {
   ankleRoll.add(arBush);
   registerExplode(arBush, -15, 0, 0, { stage: 2 });
 
-  // High-Friction 2.0 mm Silicone Sole Pad recessed into foot_sole bottom pocket (mu >= 0.90)
-  const pad = new THREE.Mesh(new THREE.BoxGeometry(43.6 * MM, 39.6 * MM, 2.0 * MM), mats.soleSilicone);
+  // Directional Chevron-Treaded 2.0 mm Silicone Anti-Slip Sole Pad
+  const pad = createSiliconeTreadPad(mats);
   pad.position.set(3.0 * MM, 0, -17.5 * MM);
-  pad.receiveShadow = true;
   ankleRoll.add(pad);
   registerExplode(pad, 0, 0, -16, { stage: 2 });
 
@@ -461,7 +457,7 @@ function buildLegChain(side) {
 const leftLeg  = buildLegChain(+1);
 const rightLeg = buildLegChain(-1);
 
-// --- 6. Complete Color-Coded 3D Silicone Power, I2C, I2S & Internal Conduit Wiring Harnesses ---
+// --- 6. Complete Color-Coded 3D Silicone Power, I2C, I2S & Conduit Harnesses ---
 const harnesses = createCompleteWiringHarnesses(mats);
 torsoGroup.add(harnesses.torsoHarness);
 headPitchJoint.add(harnesses.headHarness);
@@ -508,8 +504,6 @@ function mountSTL(url, parent, mat, offsetMM = [0, 0, 0], explodeMM = null, expl
     mesh.receiveShadow = true;
     parent.add(mesh);
     shellMeshes.push(mesh);
-
-    // Apply current anatomy shell visibility if loaded after user clicked X-Ray
     mesh.visible = (xrayStage < 2);
 
     const edges = new THREE.LineSegments(edgeGeo, edgeLineMat);
@@ -529,7 +523,6 @@ mountSTL('cad/stl/head_visor.stl',        headPitchJoint,     mats.visor,       
 mountSTL('cad/stl/arm_link_left.stl',     lShoulderJoint,     mats.shellPrimary, [0, 0, 0],         null);
 mountSTL('cad/stl/arm_link_right.stl',    rShoulderJoint,     mats.shellPrimary, [0, 0, 0],         null);
 
-// Left & Right Leg STLs (cached — zero duplicate HTTP fetches!)
 mountSTL('cad/stl/hip_clevis_left.stl',   leftLeg.hipRoll,    mats.shellAccent,  [0, 3.0, -18.0],   null);
 mountSTL('cad/stl/leg_link.stl',          leftLeg.hipPitch,   mats.shellPrimary, [0, 0, -88.0],     null);
 mountSTL('cad/stl/ankle_clevis.stl',      leftLeg.anklePitch, mats.shellAccent,  [0, 0, 0],         null);
@@ -541,27 +534,43 @@ mountSTL('cad/stl/ankle_clevis.stl',      rightLeg.anklePitch,mats.shellAccent, 
 mountSTL('cad/stl/foot_sole.stl',         rightLeg.ankleRoll, mats.shellPrimary, [0, 0, -18.0],     null);
 
 // ============================================================================
-// PURE ICON-ONLY VIEWPORT CONTROLS & MULTI-STAGE ANATOMY MODES
+// PURE ICON-ONLY VIEWPORT CONTROLS, HATCHED SECTION SCRUBBER & ANATOMY MODES
 // ============================================================================
 let isPlaying = true;
-let xrayStage = 0; // 0: Solid Shell, 1: Ghost X-Ray + Transparent Servo Gearboxes, 2: Naked Mechatronics Skeleton
+let xrayStage = 0; // 0: Solid Shell, 1: Ghost X-Ray + Transparent RF Shield & Gearboxes, 2: Naked Mechatronics
 let showSensors = true;
 let explodeFactor = 0.0;
 let simTime = 0.0;
 
-const btnPlay      = document.getElementById('btn-play');
-const btnXray      = document.getElementById('btn-xray');
-const btnCutaway   = document.getElementById('btn-cutaway');
-const btnEdges     = document.getElementById('btn-edges');
-const btnSensors   = document.getElementById('btn-sensors');
-const btnView      = document.getElementById('btn-view');
-const btnReset     = document.getElementById('btn-reset');
-const btnFull      = document.getElementById('btn-fullscreen');
-const btnInfo      = document.getElementById('btn-info');
-const btnCloseInfo = document.getElementById('btn-close-drawer');
-const btnExplode   = document.getElementById('btn-explode-toggle');
-const sliderExp    = document.getElementById('slider-explode');
-const specDrawer   = document.getElementById('spec-drawer');
+const btnPlay       = document.getElementById('btn-play');
+const btnXray       = document.getElementById('btn-xray');
+const btnCutaway    = document.getElementById('btn-cutaway');
+const btnEdges      = document.getElementById('btn-edges');
+const btnSensors    = document.getElementById('btn-sensors');
+const btnView       = document.getElementById('btn-view');
+const btnReset      = document.getElementById('btn-reset');
+const btnFull       = document.getElementById('btn-fullscreen');
+const btnInfo       = document.getElementById('btn-info');
+const btnCloseInfo  = document.getElementById('btn-close-drawer');
+const btnExplode    = document.getElementById('btn-explode-toggle');
+const sliderExp     = document.getElementById('slider-explode');
+const sectionRail   = document.getElementById('section-rail');
+const btnSecCenter  = document.getElementById('btn-section-center');
+const sliderSection = document.getElementById('slider-section');
+const specDrawer    = document.getElementById('spec-drawer');
+
+function syncSectionHatchUniform() {
+  mats.hatchUniform.value = (cutawayMode > 0 && xrayStage === 0) ? 1.0 : 0.0;
+}
+
+function updateSectionPlaneConstant(normVal) {
+  sectionOffsetNorm = Math.max(-1, Math.min(1, normVal));
+  if (sliderSection) sliderSection.value = String(Math.round(sectionOffsetNorm * 100));
+  // Sagittal Z_three range [-54mm..+54mm], Coronal X_three [-32mm..+42mm], Axial Y_three [10mm..234mm]
+  PLANE_SAGITTAL.constant = 0.001 + sectionOffsetNorm * 0.052;
+  PLANE_CORONAL.constant  = 0.003 + sectionOffsetNorm * 0.036;
+  PLANE_AXIAL.constant    = 0.125 + sectionOffsetNorm * 0.112;
+}
 
 function applyXrayStage(stage) {
   xrayStage = ((stage % 3) + 3) % 3;
@@ -574,30 +583,38 @@ function applyXrayStage(stage) {
   const isGhost = (xrayStage === 1);
   for (const sm of [mats.shellPrimary, mats.shellAccent]) {
     sm.transparent = isGhost;
-    sm.opacity = isGhost ? 0.16 : 1.0;
+    sm.opacity = isGhost ? 0.15 : 1.0;
     sm.depthWrite = !isGhost;
     sm.needsUpdate = true;
   }
   mats.visor.transparent = isGhost;
-  mats.visor.opacity = isGhost ? 0.22 : 1.0;
+  mats.visor.opacity = isGhost ? 0.20 : 1.0;
   mats.visor.depthWrite = !isGhost;
   mats.visor.needsUpdate = true;
 
-  // Reveal internal 4-stage metal gear train & coreless DC motor inside MG90S servos in X-Ray / Skeleton modes!
+  // Reveal ESP32-S3R8 QFN-56 SoC & 40MHz Crystal under XIAO RF shield + 4-stage involute gears inside servos!
   const servoTransparent = (xrayStage >= 1);
   mats.servoMG90S.transparent = servoTransparent;
-  mats.servoMG90S.opacity = (xrayStage === 1) ? 0.24 : (xrayStage === 2 ? 0.34 : 1.0);
+  mats.servoMG90S.opacity = (xrayStage === 1) ? 0.22 : (xrayStage === 2 ? 0.30 : 1.0);
   mats.servoMG90S.depthWrite = !servoTransparent;
   mats.servoMG90S.needsUpdate = true;
 
-  mats.servoSG90.opacity = servoTransparent ? 0.26 : 0.72;
+  mats.servoSG90.opacity = servoTransparent ? 0.24 : 0.70;
   mats.servoSG90.depthWrite = !servoTransparent;
   mats.servoSG90.needsUpdate = true;
+
+  mats.rfShieldGhostable.transparent = servoTransparent;
+  mats.rfShieldGhostable.opacity = servoTransparent ? 0.20 : 1.0;
+  mats.rfShieldGhostable.depthWrite = !servoTransparent;
+  mats.rfShieldGhostable.needsUpdate = true;
+
+  syncSectionHatchUniform();
 }
 
-function applyCutawayMode(mode) {
+function applyCutawayMode(mode, resetOffset = true) {
   cutawayMode = ((mode % 4) + 4) % 4;
   activeSectionPlanes.length = 0;
+  if (resetOffset) updateSectionPlaneConstant(0);
   if (cutawayMode === 1) activeSectionPlanes.push(PLANE_SAGITTAL);
   else if (cutawayMode === 2) activeSectionPlanes.push(PLANE_CORONAL);
   else if (cutawayMode === 3) activeSectionPlanes.push(PLANE_AXIAL);
@@ -606,6 +623,10 @@ function applyCutawayMode(mode) {
     btnCutaway.classList.toggle('is-active', cutawayMode > 0);
     btnCutaway.dataset.mode = String(cutawayMode);
   }
+  if (sectionRail) {
+    sectionRail.hidden = (cutawayMode === 0);
+  }
+  syncSectionHatchUniform();
 }
 
 function applyEdgesMode(enabled) {
@@ -613,6 +634,27 @@ function applyEdgesMode(enabled) {
   btnEdges.classList.toggle('is-active', showEdges);
   for (const l of edgeLines) l.visible = showEdges;
   for (const km of kinematicMarkers) km.visible = showEdges;
+}
+
+function updateAllServoGears(joints) {
+  if (!joints) {
+    for (const sv of Object.values(servoMap)) {
+      if (sv && sv.userData.updateGearTrain) sv.userData.updateGearTrain(0);
+    }
+    return;
+  }
+  servoMap.hipRoll_L?.userData.updateGearTrain(joints.l_hip_roll);
+  servoMap.hipPitch_L?.userData.updateGearTrain(joints.l_hip_pitch);
+  servoMap.anklePitch_L?.userData.updateGearTrain(joints.l_ankle_pitch);
+  servoMap.ankleRoll_L?.userData.updateGearTrain(joints.l_ankle_roll);
+  servoMap.hipRoll_R?.userData.updateGearTrain(joints.r_hip_roll);
+  servoMap.hipPitch_R?.userData.updateGearTrain(joints.r_hip_pitch);
+  servoMap.anklePitch_R?.userData.updateGearTrain(joints.r_ankle_pitch);
+  servoMap.ankleRoll_R?.userData.updateGearTrain(joints.r_ankle_roll);
+  servoMap.shoulder_L?.userData.updateGearTrain(joints.l_shoulder);
+  servoMap.shoulder_R?.userData.updateGearTrain(-joints.r_shoulder);
+  servoMap.headYaw?.userData.updateGearTrain(joints.head_yaw);
+  servoMap.headPitch?.userData.updateGearTrain(joints.head_pitch);
 }
 
 function resetPoseToNeutral() {
@@ -624,6 +666,7 @@ function resetPoseToNeutral() {
   rightLeg.anklePitch.rotation.y = 0; rightLeg.ankleRoll.rotation.x = 0;
   lShoulderJoint.rotation.y = 0; rShoulderJoint.rotation.y = 0;
   headYawJoint.rotation.z = 0; headPitchJoint.rotation.y = 0;
+  updateAllServoGears(null);
 }
 
 function smoothStep01(x) {
@@ -642,8 +685,6 @@ function setExplode(val01) {
     resetPoseToNeutral();
   }
 
-  // Stage 1 (0..0.62): Sub-assemblies & service covers separate
-  // Stage 2 (0.35..1.0): Individual servos, horns, M2 bolts, bushings, cells & pads extract coaxially!
   const tStage1 = smoothStep01(explodeFactor / 0.62);
   const tStage2 = smoothStep01((explodeFactor - 0.35) / 0.65);
 
@@ -661,7 +702,6 @@ function setExplode(val01) {
     }
   }
 
-  // Hide flexible wire harnesses cleanly during wide explosion so mechanical coaxial lines stay crystal clear
   const showHarness = explodeFactor < 0.22;
   for (const hg of harnessGroups) hg.visible = showHarness;
 }
@@ -674,7 +714,15 @@ btnPlay.addEventListener('click', () => {
 
 btnXray.addEventListener('click', () => applyXrayStage(xrayStage + 1));
 if (btnCutaway) {
-  btnCutaway.addEventListener('click', () => applyCutawayMode(cutawayMode + 1));
+  btnCutaway.addEventListener('click', () => applyCutawayMode(cutawayMode + 1, true));
+}
+if (sliderSection) {
+  sliderSection.addEventListener('input', (e) => {
+    updateSectionPlaneConstant(Number(e.target.value) / 100.0);
+  });
+}
+if (btnSecCenter) {
+  btnSecCenter.addEventListener('click', () => updateSectionPlaneConstant(0));
 }
 btnEdges.addEventListener('click', () => applyEdgesMode(!showEdges));
 
@@ -694,7 +742,7 @@ btnReset.addEventListener('click', () => {
   applyCameraPreset(0, false);
   setExplode(0.0);
   applyXrayStage(0);
-  applyCutawayMode(0);
+  applyCutawayMode(0, true);
   applyEdgesMode(false);
 });
 
@@ -731,16 +779,15 @@ function toggleDrawer(open) {
 btnInfo.addEventListener('click', () => toggleDrawer(!specDrawer.classList.contains('is-open')));
 btnCloseInfo.addEventListener('click', () => toggleDrawer(false));
 
-// Interactive Subsystem Anatomy Focus Preset Trigger (callable from inside #spec-drawer)
 const ANATOMY_PRESETS = {
-  sagittal_cut: { view: 2, xray: 0, cutaway: 1, explode: 0.0,  edges: true  },
-  xray_gears:   { view: 0, xray: 1, cutaway: 0, explode: 0.0,  edges: true  },
-  naked_core:   { view: 0, xray: 2, cutaway: 0, explode: 0.0,  edges: false },
-  head_ai:      { view: 4, xray: 1, cutaway: 1, explode: 0.0,  edges: false },
-  torso_ctrl:   { view: 5, xray: 1, cutaway: 2, explode: 0.0,  edges: true  },
-  power_2s:     { view: 3, xray: 1, cutaway: 0, explode: 0.35, edges: false },
-  ankle_mech:   { view: 6, xray: 1, cutaway: 0, explode: 0.55, edges: true  },
-  full_explode: { view: 7, xray: 0, cutaway: 0, explode: 1.0,  edges: false },
+  sagittal_cut: { view: 2, xray: 0, cutaway: 1, secOff: 0.0,   explode: 0.0,  edges: true  },
+  xray_gears:   { view: 0, xray: 1, cutaway: 0, secOff: 0.0,   explode: 0.0,  edges: true  },
+  naked_core:   { view: 0, xray: 2, cutaway: 0, secOff: 0.0,   explode: 0.0,  edges: false },
+  head_ai:      { view: 4, xray: 0, cutaway: 1, secOff: -0.02, explode: 0.0,  edges: false },
+  torso_ctrl:   { view: 5, xray: 0, cutaway: 2, secOff: 0.08,  explode: 0.0,  edges: true  },
+  power_2s:     { view: 3, xray: 1, cutaway: 0, secOff: 0.0,   explode: 0.35, edges: false },
+  ankle_mech:   { view: 6, xray: 1, cutaway: 0, secOff: 0.0,   explode: 0.55, edges: true  },
+  full_explode: { view: 7, xray: 0, cutaway: 0, secOff: 0.0,   explode: 1.0,  edges: false },
 };
 
 document.querySelectorAll('[data-anatomy-preset]').forEach((btn) => {
@@ -751,7 +798,8 @@ document.querySelectorAll('[data-anatomy-preset]').forEach((btn) => {
     currentViewIdx = cfg.view;
     applyCameraPreset(cfg.view, false);
     applyXrayStage(cfg.xray);
-    applyCutawayMode(cfg.cutaway);
+    applyCutawayMode(cfg.cutaway, false);
+    updateSectionPlaneConstant(cfg.secOff || 0.0);
     applyEdgesMode(cfg.edges);
     setExplode(cfg.explode);
     if (window.innerWidth < 760) toggleDrawer(false);
@@ -838,7 +886,7 @@ function populateExplanationDrawer() {
 }
 populateExplanationDrawer();
 
-// --- Main 60 FPS Animation Loop Replaying Real Recorded MuJoCo RNV1 Physics Frames ---
+// --- Main 60 FPS Animation Loop Replaying Real MuJoCo RNV1 Physics + Live Gear Meshing ---
 const clock = new THREE.Clock();
 const tmpQ1 = new THREE.Quaternion();
 const tmpQ2 = new THREE.Quaternion();
@@ -860,20 +908,38 @@ function applyMuJoCoReplay(tSec) {
   torsoGroup.quaternion.copy(tmpQ1).slerp(tmpQ2, u);
 
   const ja = a.joints, jb = b.joints;
-  leftLeg.hipRoll.rotation.x     = lerp(ja.l_hip_roll, jb.l_hip_roll);
-  leftLeg.hipPitch.rotation.y    = lerp(ja.l_hip_pitch, jb.l_hip_pitch);
-  leftLeg.anklePitch.rotation.y  = lerp(ja.l_ankle_pitch, jb.l_ankle_pitch);
-  leftLeg.ankleRoll.rotation.x   = lerp(ja.l_ankle_roll, jb.l_ankle_roll);
+  const curJ = {
+    l_hip_roll:    lerp(ja.l_hip_roll, jb.l_hip_roll),
+    l_hip_pitch:   lerp(ja.l_hip_pitch, jb.l_hip_pitch),
+    l_ankle_pitch: lerp(ja.l_ankle_pitch, jb.l_ankle_pitch),
+    l_ankle_roll:  lerp(ja.l_ankle_roll, jb.l_ankle_roll),
+    r_hip_roll:    lerp(ja.r_hip_roll, jb.r_hip_roll),
+    r_hip_pitch:   lerp(ja.r_hip_pitch, jb.r_hip_pitch),
+    r_ankle_pitch: lerp(ja.r_ankle_pitch, jb.r_ankle_pitch),
+    r_ankle_roll:  lerp(ja.r_ankle_roll, jb.r_ankle_roll),
+    l_shoulder:    lerp(ja.l_shoulder, jb.l_shoulder),
+    r_shoulder:    lerp(ja.r_shoulder, jb.r_shoulder),
+    head_yaw:      lerp(ja.head_yaw, jb.head_yaw),
+    head_pitch:    lerp(ja.head_pitch, jb.head_pitch),
+  };
 
-  rightLeg.hipRoll.rotation.x    = lerp(ja.r_hip_roll, jb.r_hip_roll);
-  rightLeg.hipPitch.rotation.y   = lerp(ja.r_hip_pitch, jb.r_hip_pitch);
-  rightLeg.anklePitch.rotation.y = lerp(ja.r_ankle_pitch, jb.r_ankle_pitch);
-  rightLeg.ankleRoll.rotation.x  = lerp(ja.r_ankle_roll, jb.r_ankle_roll);
+  leftLeg.hipRoll.rotation.x     = curJ.l_hip_roll;
+  leftLeg.hipPitch.rotation.y    = curJ.l_hip_pitch;
+  leftLeg.anklePitch.rotation.y  = curJ.l_ankle_pitch;
+  leftLeg.ankleRoll.rotation.x   = curJ.l_ankle_roll;
 
-  lShoulderJoint.rotation.y      = lerp(ja.l_shoulder, jb.l_shoulder);
-  rShoulderJoint.rotation.y      = lerp(ja.r_shoulder, jb.r_shoulder);
-  headYawJoint.rotation.z        = lerp(ja.head_yaw, jb.head_yaw);
-  headPitchJoint.rotation.y      = lerp(ja.head_pitch, jb.head_pitch);
+  rightLeg.hipRoll.rotation.x    = curJ.r_hip_roll;
+  rightLeg.hipPitch.rotation.y   = curJ.r_hip_pitch;
+  rightLeg.anklePitch.rotation.y = curJ.r_ankle_pitch;
+  rightLeg.ankleRoll.rotation.x  = curJ.r_ankle_roll;
+
+  lShoulderJoint.rotation.y      = curJ.l_shoulder;
+  rShoulderJoint.rotation.y      = curJ.r_shoulder;
+  headYawJoint.rotation.z        = curJ.head_yaw;
+  headPitchJoint.rotation.y      = curJ.head_pitch;
+
+  // Drive all 12 internal 4-stage involute gear trains in real time!
+  updateAllServoGears(curJ);
 }
 
 function animate() {

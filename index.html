@@ -33,6 +33,18 @@
       </button>
     </div>
 
+    <!-- Pure Icon-Only Continuous Section-Plane Depth Scrubber (Shown when Cutaway is Active, Zero Text) -->
+    <div id="section-rail" class="cad-section-rail" role="group" hidden>
+      <button id="btn-section-center" class="icon-btn icon-btn-sm is-active" type="button" aria-label="Center Section Plane">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2.5 2.5"></line>
+          <polyline points="8 9 5 12 8 15"></polyline>
+          <polyline points="16 9 19 12 16 15"></polyline>
+        </svg>
+      </button>
+      <input id="slider-section" class="cad-slider" type="range" min="-100" max="100" value="0" aria-label="Section plane offset">
+    </div>
+
     <!-- Pure Icon-Only Explode Assembly Slider (Zero Text) -->
     <div class="cad-explode-rail" role="group">
       <button id="btn-explode-toggle" class="icon-btn icon-btn-sm" type="button" aria-label="Explode">
@@ -121,44 +133,44 @@
 
     <div class="spec-drawer-body" id="spec-content">
       <section class="spec-section">
-        <h2>超超高精細 3D CAD 実部品解剖図（ワンクリック部位フォーカス）</h2>
+        <h2>超超高精細 3D CAD 実部品ミクロ解剖図（ワンクリック部位フォーカス）</h2>
         <p>
-          実売BOM・配線仕様書（<code>wiring_pinout.json</code>）・OpenSCAD実寸（<code>0.01 mm</code>同軸整合）に基づき、外装STLだけでなく<strong>MG90S内部4段金属スパーギア列・コアレスDCモータ・ポテンショメータ、ICパッケージ、48ピン金メッキサーボヘッダ、25ピンCNC放熱フィン、1N5819ショットキー、M2ステンレス締結ボルト44本、二面せん断真鍮ブッシュ、脚内コンジットを通る色分けシリコン配線ハーネス</strong>まで完全立体再現しています。
+          実売BOM・配線仕様書（<code>wiring_pinout.json</code>）・OpenSCAD実寸（<code>0.01 mm</code>同軸整合）に基づき、<strong>インボリュート歯形4段金属スパーギア列（歩行連動リアルタイム噛合回転！）・M2雄ネジ山＆座金・基板銅箔パターン＆シルク印刷・RFシールド下のESP32-S3R8シリコンダイ＆40MHz水晶・OV5640内部3群光学レンズ＆CMOSウェハ・スピーカー内部銅ボイスコイル＆ノーメックスダンパ・45°断面ハッチングシェーダ・連続CTスライス断面スライダー</strong>まで完全立体再現しています。
         </p>
         <div class="anatomy-preset-grid">
-          <button type="button" class="anatomy-chip" data-anatomy-preset="sagittal_cut">矢状断面カット＋重心軸</button>
-          <button type="button" class="anatomy-chip" data-anatomy-preset="xray_gears">X線透過＋内部4段金属ギア</button>
-          <button type="button" class="anatomy-chip" data-anatomy-preset="naked_core">外装非表示・完全内部骨格</button>
-          <button type="button" class="anatomy-chip" data-anatomy-preset="head_ai">頭部AI・OV5640・VL53L0X</button>
-          <button type="button" class="anatomy-chip" data-anatomy-preset="torso_ctrl">胴体PCA9685・独立2系統電源</button>
-          <button type="button" class="anatomy-chip" data-anatomy-preset="power_2s">背面2S 14500・BMS・USB-C</button>
-          <button type="button" class="anatomy-chip" data-anatomy-preset="ankle_mech">同軸2軸足首・二面せん断</button>
-          <button type="button" class="anatomy-chip" data-anatomy-preset="full_explode">2段階同軸ガイド全分解図</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="sagittal_cut">矢状断面ハッチング＋CTスライス</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="xray_gears">X線透過＋連動インボリュート歯車</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="naked_core">外装非表示・完全内部メカトロ骨格</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="head_ai">頭部SoC・3群光学レンズ・ToF断面</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="torso_ctrl">胴体銅箔基板・独立2系統電源断面</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="power_2s">背面14500セル・BMS・USB-C・6A SW</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="ankle_mech">同軸2軸足首・歯車噛合・二面せん断</button>
+          <button type="button" class="anatomy-chip" data-anatomy-preset="full_explode">2段階同軸破線ガイド全65部品分解図</button>
         </div>
         <table class="spec-table">
           <thead>
-            <tr><th>実装部位</th><th>精密再現された実部品ディテール・電気バス</th></tr>
+            <tr><th>実装部位</th><th>ミクロ再現された実部品構造・回路シルク・機械要素</th></tr>
           </thead>
           <tbody>
-            <tr>
-              <th>頭部AI・視覚・聴覚</th>
-              <td><strong>XIAO ESP32S3 Sense</strong>（14金メッキ端面スルーホール・RFシールド・<strong>5×5ピンCNC黒アルマイト放熱器</strong>・B2B拡張基板・<strong>MSM261 PDMマイク</strong>・2.4GHz FPCアンテナ・24pin金FPC・<strong>OV5640多群コートガラスレンズ</strong>）＋ 同軸 <strong>VL53L0X</strong>（VCSEL発光窓＋SPAD受光窓）</td>
+            <tr data-part-row="head">
+              <th>頭部SoC・3群光学・音響</th>
+              <td><strong>XIAO ESP32S3 Sense</strong>（シルク印刷4層基板・RFシールド下の<strong>ESP32-S3R8 QFN-56 SoC＋8MB Flash＋40MHz水晶</strong>・青色TIM放熱シート・<strong>25ピンCNC黒アルマイト放熱器</strong>・EPDM防振ガスケット付<strong>MSM261 PDMマイク</strong>・FPCアンテナ・<strong>CMOS虹色ウェハ＋IRカットフィルタ＋3群ガラスレンズ積層OV5640</strong>）＋ 光学隔壁付 <strong>VL53L0X</strong>（VCSEL/SPAD 2窓）</td>
             </tr>
-            <tr>
-              <th>胴体制御・重心IMU</th>
-              <td><strong>PCA9685</strong>（TSSOP-28・黄/赤/黒3色48ピン＋CH0〜11嵌合コネクタ・V+緑ネジ端子台）＋ 骨盤クロスビーム上の <strong>MPU-6050</strong>（QFN-24・M2×5固定・全身重心球 <code>[0.99, 0, 111.55] mm</code>＋支持多角形鉛直線）</td>
+            <tr data-part-row="torso">
+              <th>銅箔制御基板・重心IMU</th>
+              <td><strong>PCA9685</strong>（16ch銅箔配線パターン＆<code>CH0..15 / I2C:0x40</code>シルク印刷・真鍮六角スペーサ・TSSOP-28リード・黄/赤/黒48金ピン＋嵌合プラグ）＋ 真鍮インサート＆M2ネジ締結 <strong>MPU-6050</strong>（<code>+X/+Y</code>軸シルク・QFN-24・全身重心球 <code>[0.99, 0, 111.55] mm</code>＋支持多角形鉛直線）</td>
             </tr>
-            <tr>
-              <th>独立2系統電源・保護</th>
-              <td>サーボ用 <strong>Mini560 (5.6V 5A)</strong>（<code>4R7</code>シールドインダクタ＋MLCC群）＋ <strong>1000µF 10V低ESR電解</strong>、論理用 <strong>Mini-360 (5.0V 2A)</strong> ＋ <strong>1N5819逆流防止ショットキー</strong> ＋ <code>200k/100kΩ</code>電圧分圧</td>
+            <tr data-part-row="power">
+              <th>独立2系統DCDC・保護</th>
+              <td>サーボ用 <strong>Mini560 (5.6V 5A)</strong>（放熱ビア群・<code>4R7</code>レーザー刻印インダクタ・MLCC・多回転トリマ）＋ <strong>1000µF 10V 105°C LOW-ESR電解</strong>（極性スリーブ印刷＋K字防爆弁溝）、論理用 <strong>Mini-360 (5.0V 2A)</strong> ＋ <strong>1N5819ショットキー</strong> ＋ <code>VBAT_ADC</code>分圧＆<code>OE#</code>制御線</td>
             </tr>
-            <tr>
-              <th>2S電源・背面I/O</th>
-              <td><strong>14500 800mAh 10C×2本</strong>（純ニッケル直列タブ溶接）＋ <strong>2S 5A BMS</strong>（4×8205A MOSFET）＋ 背面カバー開口一致 <strong>USB-C 2S昇圧充電口</strong> ＆ <strong>6Aスライドスイッチ</strong> ＋ M2×6六角穴付ボルト4本</td>
+            <tr data-part-row="battery">
+              <th>2S 14500・BMS・音響</th>
+              <td><strong>INR14500 800mAh 10C×2本</strong>（定格印字シュリンク・円錐ニッケル負極バネ・純ニッケル直列溶接タブ・<code>BM 3.7V</code>バランス線）＋ <strong>2S 5A BMS</strong>（<code>B-/BM/B+</code>シルク＋4×8205A＋<code>R010</code>シャント）＋ <strong>MAX98357A</strong> ＋ <strong>内部銅ボイスコイル＆ノーメックスダンパ内蔵28mmスピーカー</strong></td>
             </tr>
-            <tr>
-              <th>12軸駆動・二面せん断</th>
-              <td><strong>10×MG90S</strong>（21T真鍮スプライン・内部コアレスモータ・<strong>4段金属減速ギア列</strong>・ポテンショメータ）＋ <strong>2×半透明SG90</strong>（POM白ギア列）＋ 子リンク追従サーボホーン12個 ＋ 対向<strong>Ø4mmフランジ付真鍮ブッシュ</strong> ＋ 脚内<code>X=-6.8mm</code>ボア挿通ハーネス</td>
+            <tr data-part-row="actuators">
+              <th>噛合インボリュート歯車・締結</th>
+              <td><strong>10×MG90S＋2×SG90</strong>（<strong>9Tピニオン→18T→22T→28T肉抜き出力歯車＋21Tセレーションスプライン</strong>が関節角速度比最大62倍でリアルタイム噛合回転！出力軸ボールベアリング＆銅巻線ロータ内蔵）＋ <strong>ネジ山・平座金付M2ボルト44本</strong> ＋ <strong>Cリング付Ø4mm二面せん断真鍮ブッシュ</strong> ＋ トレッド溝付シリコン足裏</td>
             </tr>
           </tbody>
         </table>
@@ -203,13 +215,13 @@
       <section class="spec-section">
         <h2>操作ガイド（アイコン説明）</h2>
         <ul class="spec-list">
-          <li><strong>▶ / ⏸:</strong> 最適化学習済 RNV1 ニューラル方策の MuJoCo 4.0.1 実物理歩行モーション再生・一時停止</li>
-          <li><strong>積層アイコン（3段階切替）:</strong> 通常外観 → 精密X線透過（内部4段金属ギア・モータ・基板・配線透視） → 外装非表示スケルトン解剖モード</li>
-          <li><strong>断面立方体アイコン（4段階切替）:</strong> 選択的CAD断面カット（OFF → 矢状断面［右半シェル切断・内部部品保持］ → 前額断面 → 水平断面）</li>
+          <li><strong>▶ / ⏸:</strong> 最適化学習済 RNV1 ニューラル方策の MuJoCo 4.0.1 実物理歩行モーション＋内部4段インボリュート歯車連動再生</li>
+          <li><strong>積層アイコン（3段階切替）:</strong> 通常外観 → 精密X線透過（RFシールド下SoC・内部4段噛合金属ギア・基板シルク・配線透視） → 外装非表示スケルトン解剖モード</li>
+          <li><strong>断面立方体アイコン（4段階＋左スライダー連動）:</strong> 45°断面ハッチング付CAD断面カット（OFF → 矢状断面 → 前額断面 → 水平断面）。有効時は左上に<strong>CTスライス連続断面スライダー</strong>が出現し、任意の深さで内部を走査可能</li>
           <li><strong>グリッド四角アイコン:</strong> CAD精密エッジライン ＋ 12軸関節回転ベクトル（赤Roll/緑Pitch/青Yaw） ＋ 全身重心鉛直線・支持多角形表示</li>
           <li><strong>電波扇形アイコン:</strong> 2軸アクティブVL53L0Xレーザー空間スキャン＆カメラ視野錐台表示</li>
-          <li><strong>左下立方体スライダー:</strong> 2段階同軸ガイド線付き3D分解組立図（カバー・脚展開 → サーボ・ホーン・M2ネジ・電池セル同軸抽出）</li>
-          <li><strong>六角形アイコン（7視点切替）:</strong> 等角 / 正面 / 側面 / 背面電源ベイ / 頭部AIマクロ / 胴体基板マクロ / 足首クレビスマクロ</li>
+          <li><strong>左下立方体スライダー:</strong> 2段階同軸ガイド破線付き3D全分解組立図</li>
+          <li><strong>六角形アイコン（8視点切替）:</strong> 等角 / 正面 / 側面 / 背面電源ベイ / 頭部AIマクロ / 胴体基板マクロ / 足首クレビスマクロ / 全分解ワイド</li>
           <li><strong>矢印アイコン:</strong> 全画面表示（スマホ横全画面ロック対応）</li>
         </ul>
       </section>

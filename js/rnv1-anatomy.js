@@ -1,20 +1,92 @@
-// RNV1 Ultra-High-Definition 3D CAD Mechatronics Anatomy Builder
-// Every dimension, pinout, IC package, fastener, gear stage, and wire bus is grounded directly in:
-//   - bom/rnv1_bom.json & bom/wiring_pinout.json
-//   - cad/rnv1_params.scad & cad/parts/*.scad
-//   - simulation/rnv1_humanoid.xml (Exact CoM & 12-DOF joint frames)
+// RNV1 Watchmaker-Grade Ultra-Micro-Detailed 3D CAD Mechatronics Anatomy Builder
+// Grounded to 0.01 mm in bom/rnv1_bom.json, bom/wiring_pinout.json, cad/rnv1_params.scad & cad/parts/*.scad.
 import * as THREE from '../vendor/three/three.module.min.js';
+import { createMicroComponentTextures, applySectionCapHatchShader } from './rnv1-textures.js';
 
 export const MM = 0.001;
 
-// --- Shared Micro-Geometries (Instanced/Reused for crisp 60 FPS rendering) ---
+// --- Shared Micro-Geometries & True Extruded Involute Spur Gears ---
 const GEO_PIN_GOLD     = new THREE.BoxGeometry(0.64 * MM, 0.64 * MM, 6.2 * MM);
-const GEO_M2_HEAD      = new THREE.CylinderGeometry(1.9 * MM, 1.9 * MM, 1.8 * MM, 16);
-const GEO_M2_HEX       = new THREE.CylinderGeometry(0.85 * MM, 0.85 * MM, 0.9 * MM, 6);
-const GEO_M2_PAN       = new THREE.CylinderGeometry(1.85 * MM, 1.55 * MM, 1.2 * MM, 16);
+const GEO_M2_HEAD      = new THREE.CylinderGeometry(1.9 * MM, 1.9 * MM, 1.8 * MM, 18);
+const GEO_M2_HEX       = new THREE.CylinderGeometry(0.85 * MM, 0.85 * MM, 0.95 * MM, 6);
+const GEO_M2_PAN       = new THREE.CylinderGeometry(1.85 * MM, 1.55 * MM, 1.2 * MM, 18);
+const GEO_M2_WASHER    = new THREE.CylinderGeometry(2.35 * MM, 2.35 * MM, 0.35 * MM, 18);
+const GEO_THREAD_RING  = new THREE.TorusGeometry(0.96 * MM, 0.13 * MM, 6, 14);
 const GEO_SMD_0603     = new THREE.BoxGeometry(1.6 * MM, 0.8 * MM, 0.7 * MM);
 const GEO_SMD_1206     = new THREE.BoxGeometry(3.2 * MM, 1.6 * MM, 1.2 * MM);
-const GEO_HEATSINK_PIN = new THREE.BoxGeometry(3.4 * MM, 1.25 * MM, 1.25 * MM);
+const GEO_HEATSINK_PIN = new THREE.BoxGeometry(3.5 * MM, 1.25 * MM, 1.25 * MM);
+
+const gearGeoCache = new Map();
+
+/**
+ * Generate a true extruded involute-profile toothed spur gear BufferGeometry (axis along Z, centered).
+ */
+export function getSpurGearGeometry(numTeeth, pitchRadiusMM, thicknessMM, boreRadiusMM = 0.7, webHoles = false) {
+  const key = `${numTeeth}_${pitchRadiusMM}_${thicknessMM}_${webHoles}`;
+  if (gearGeoCache.has(key)) return gearGeoCache.get(key);
+
+  const moduleMM = (2.0 * pitchRadiusMM) / numTeeth;
+  const rAdd = (pitchRadiusMM + 0.92 * moduleMM) * MM;
+  const rDed = Math.max(boreRadiusMM * 1.25, pitchRadiusMM - 1.12 * moduleMM) * MM;
+  const rPitch = pitchRadiusMM * MM;
+
+  const shape = new THREE.Shape();
+  const stepAng = (Math.PI * 2.0) / numTeeth;
+
+  for (let i = 0; i < numTeeth; ++i) {
+    const a0 = i * stepAng;
+    const aRoot1 = a0 + stepAng * 0.12;
+    const aPitch1 = a0 + stepAng * 0.25;
+    const aTip1 = a0 + stepAng * 0.34;
+    const aTip2 = a0 + stepAng * 0.54;
+    const aPitch2 = a0 + stepAng * 0.63;
+    const aRoot2 = a0 + stepAng * 0.76;
+
+    const pts = [
+      [rDed * Math.cos(a0),      rDed * Math.sin(a0)],
+      [rDed * Math.cos(aRoot1),  rDed * Math.sin(aRoot1)],
+      [rPitch * Math.cos(aPitch1), rPitch * Math.sin(aPitch1)],
+      [rAdd * Math.cos(aTip1),   rAdd * Math.sin(aTip1)],
+      [rAdd * Math.cos(aTip2),   rAdd * Math.sin(aTip2)],
+      [rPitch * Math.cos(aPitch2), rPitch * Math.sin(aPitch2)],
+      [rDed * Math.cos(aRoot2),  rDed * Math.sin(aRoot2)],
+    ];
+    if (i === 0) shape.moveTo(pts[0][0], pts[0][1]);
+    else shape.lineTo(pts[0][0], pts[0][1]);
+    for (let k = 1; k < pts.length; ++k) shape.lineTo(pts[k][0], pts[k][1]);
+  }
+  shape.closePath();
+
+  // Central axle bore hole
+  const borePath = new THREE.Path();
+  borePath.absarc(0, 0, boreRadiusMM * MM, 0, Math.PI * 2, true);
+  shape.holes.push(borePath);
+
+  // 4 circular lightening web cutouts on main output gear
+  if (webHoles && pitchRadiusMM >= 4.2) {
+    const rWebOrbit = pitchRadiusMM * 0.52 * MM;
+    const rWebHole = pitchRadiusMM * 0.16 * MM;
+    for (let w = 0; w < 4; ++w) {
+      const ang = (w * Math.PI) / 2.0 + Math.PI * 0.25;
+      const wp = new THREE.Path();
+      wp.absarc(rWebOrbit * Math.cos(ang), rWebOrbit * Math.sin(ang), rWebHole, 0, Math.PI * 2, true);
+      shape.holes.push(wp);
+    }
+  }
+
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: thicknessMM * MM,
+    bevelEnabled: true,
+    bevelThickness: 0.08 * MM,
+    bevelSize: 0.06 * MM,
+    bevelSegments: 1,
+    curveSegments: 2,
+  });
+  geo.translate(0, 0, -0.5 * thicknessMM * MM);
+  geo.computeVertexNormals();
+  gearGeoCache.set(key, geo);
+  return geo;
+}
 
 /**
  * Weld duplicate STL triangle soup vertices & compute smooth creased normals
@@ -26,13 +98,12 @@ export function computeCreasedNormals(stlGeo, creaseAngleDeg = 30.0) {
   const count = posAttr.count;
   const cosThresh = Math.cos((creaseAngleDeg * Math.PI) / 180.0);
 
-  // Compute per-face unit normals
   const faceNormals = new Float32Array(count * 3);
   const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
   const cb = new THREE.Vector3(), ab = new THREE.Vector3();
 
   const vertMap = new Map();
-  const quant = 1e5; // 0.01 mm precision after MM scaling
+  const quant = 1e5;
 
   for (let i = 0; i < count; i += 3) {
     vA.fromBufferAttribute(posAttr, i);
@@ -88,184 +159,232 @@ export function computeCreasedNormals(stlGeo, creaseAngleDeg = 30.0) {
 }
 
 /**
- * Create curated physically-based industrial CAD materials.
- * Shell & outer servo housings accept dynamic section-cutaway clippingPlanes,
- * while internal gears, motors, PCBs, fasteners, and wires remain whole inside cut cavities!
+ * Create curated PBR + Silkscreened PCB + Cross-Section Hatched CAD Materials.
  */
-export function createAnatomyMaterials(sectionPlanes) {
+export function createAnatomyMaterials(sectionPlanes, maxAnisotropy = 8) {
+  const tex = createMicroComponentTextures(maxAnisotropy);
+  const hatchUniform = { value: 0.0 };
+
+  const shellPrimary = new THREE.MeshStandardMaterial({
+    color: 0xf4f6f9, roughness: 0.38, metalness: 0.05,
+    side: THREE.DoubleSide, clippingPlanes: sectionPlanes, clipShadows: true,
+  });
+  const shellAccent = new THREE.MeshStandardMaterial({
+    color: 0xe2e7f0, roughness: 0.44, metalness: 0.08,
+    side: THREE.DoubleSide, clippingPlanes: sectionPlanes, clipShadows: true,
+  });
+  const servoMG90S = new THREE.MeshStandardMaterial({
+    color: 0x1b4785, roughness: 0.34, metalness: 0.12,
+    side: THREE.DoubleSide, clippingPlanes: sectionPlanes, clipShadows: true,
+  });
+
+  // Apply 45-degree engineering CAD cross-hatch shader on sliced watertight solid walls!
+  applySectionCapHatchShader(shellPrimary, hatchUniform, [0.83, 0.88, 0.94], [0.05, 0.44, 0.72]);
+  applySectionCapHatchShader(shellAccent,  hatchUniform, [0.78, 0.84, 0.92], [0.05, 0.44, 0.72]);
+  applySectionCapHatchShader(servoMG90S,   hatchUniform, [0.22, 0.42, 0.72], [0.85, 0.92, 0.98]);
+
   return {
-    // Sectionable Structural & Servo Shells
-    shellPrimary: new THREE.MeshStandardMaterial({
-      color: 0xf4f6f9, roughness: 0.38, metalness: 0.05,
-      side: THREE.DoubleSide, clippingPlanes: sectionPlanes, clipShadows: true,
-    }),
-    shellAccent: new THREE.MeshStandardMaterial({
-      color: 0xe3e8f0, roughness: 0.44, metalness: 0.08,
-      side: THREE.DoubleSide, clippingPlanes: sectionPlanes, clipShadows: true,
-    }),
+    hatchUniform,
+    shellPrimary,
+    shellAccent,
     visor: new THREE.MeshPhysicalMaterial({
       color: 0x121722, roughness: 0.10, metalness: 0.25, clearcoat: 1.0, clearcoatRoughness: 0.08,
       side: THREE.DoubleSide, clippingPlanes: sectionPlanes, clipShadows: true,
     }),
-    servoMG90S: new THREE.MeshStandardMaterial({
-      color: 0x1b4785, roughness: 0.34, metalness: 0.12,
-      side: THREE.DoubleSide, clippingPlanes: sectionPlanes, clipShadows: true,
-    }),
+    servoMG90S,
     servoSG90: new THREE.MeshPhysicalMaterial({
       color: 0x2979cf, roughness: 0.22, metalness: 0.05,
-      transparent: true, opacity: 0.72, clearcoat: 0.6,
+      transparent: true, opacity: 0.70, clearcoat: 0.6,
       side: THREE.DoubleSide, clippingPlanes: sectionPlanes, clipShadows: true,
     }),
+    rfShieldGhostable: new THREE.MeshStandardMaterial({
+      color: 0xd8dfe8, roughness: 0.22, metalness: 0.88,
+      side: THREE.DoubleSide, clippingPlanes: sectionPlanes,
+    }),
+    camBarrelClip: new THREE.MeshStandardMaterial({
+      color: 0x1b1f26, roughness: 0.30, metalness: 0.78,
+      side: THREE.DoubleSide, clippingPlanes: sectionPlanes,
+    }),
+
+    // Silkscreened & Laser-Marked Component Materials
+    pcbPCA9685:   new THREE.MeshStandardMaterial({ map: tex.pca9685Tex,   roughness: 0.38, metalness: 0.16 }),
+    pcbMPU6050:   new THREE.MeshStandardMaterial({ map: tex.mpu6050Tex,   roughness: 0.38, metalness: 0.16 }),
+    pcbXIAO:      new THREE.MeshStandardMaterial({ map: tex.xiaoPcbTex,   roughness: 0.40, metalness: 0.16 }),
+    pcbBuck:      new THREE.MeshStandardMaterial({ map: tex.buckPcbTex,   roughness: 0.40, metalness: 0.18 }),
+    pcbBMS:       new THREE.MeshStandardMaterial({ map: tex.bmsPcbTex,    roughness: 0.40, metalness: 0.18 }),
+    pcbPurple:    new THREE.MeshStandardMaterial({ map: tex.purplePcbTex, roughness: 0.40, metalness: 0.15 }),
+    liIonBlue:    new THREE.MeshStandardMaterial({ map: tex.liIonCellTex, roughness: 0.26, metalness: 0.34 }),
+    capSleeve:    new THREE.MeshStandardMaterial({ map: tex.capSleeveTex, roughness: 0.30, metalness: 0.24 }),
+    ferrite4R7:   new THREE.MeshStandardMaterial({ map: tex.inductor4R7Tex, roughness: 0.52, metalness: 0.24 }),
+    icLaser:      new THREE.MeshStandardMaterial({ map: tex.icLaserTex,   roughness: 0.44, metalness: 0.18 }),
 
     // Unclipped Internal Precision Mechatronics Materials
-    soleSilicone:  new THREE.MeshStandardMaterial({ color: 0x23272e, roughness: 0.88, metalness: 0.02 }),
-    stainless:     new THREE.MeshStandardMaterial({ color: 0xd8dfe8, roughness: 0.22, metalness: 0.88 }),
-    darkSteel:     new THREE.MeshStandardMaterial({ color: 0x38404c, roughness: 0.32, metalness: 0.80 }),
-    brass:         new THREE.MeshStandardMaterial({ color: 0xd4a647, roughness: 0.24, metalness: 0.88 }),
-    gold:          new THREE.MeshStandardMaterial({ color: 0xebb83b, roughness: 0.18, metalness: 0.92 }),
-    copper:        new THREE.MeshStandardMaterial({ color: 0xc96b38, roughness: 0.26, metalness: 0.86 }),
+    soleSilicone:  new THREE.MeshStandardMaterial({ color: 0x21252c, roughness: 0.88, metalness: 0.02 }),
+    stainless:     new THREE.MeshStandardMaterial({ color: 0xd8dfe8, roughness: 0.20, metalness: 0.90 }),
+    darkSteel:     new THREE.MeshStandardMaterial({ color: 0x38404c, roughness: 0.30, metalness: 0.82 }),
+    brass:         new THREE.MeshStandardMaterial({ color: 0xd6a848, roughness: 0.22, metalness: 0.88 }),
+    gold:          new THREE.MeshStandardMaterial({ color: 0xefb93c, roughness: 0.16, metalness: 0.94 }),
+    copper:        new THREE.MeshStandardMaterial({ color: 0xc96b38, roughness: 0.24, metalness: 0.88 }),
+    nomexSpider:   new THREE.MeshStandardMaterial({ color: 0xb47b2a, roughness: 0.62, metalness: 0.08, side: THREE.DoubleSide }),
+    timPadBlue:    new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.65, metalness: 0.02 }),
+    cmosWafer:     new THREE.MeshPhysicalMaterial({ color: 0x059669, roughness: 0.05, metalness: 0.65, clearcoat: 1.0, iridescence: 1.0 }),
+    irCutFilter:   new THREE.MeshPhysicalMaterial({ color: 0xbe185d, roughness: 0.06, metalness: 0.10, transparent: true, opacity: 0.52 }),
     anodizedBlack: new THREE.MeshStandardMaterial({ color: 0x1b1f26, roughness: 0.32, metalness: 0.76 }),
-    aluminum:      new THREE.MeshStandardMaterial({ color: 0xcdd4de, roughness: 0.25, metalness: 0.84 }),
+    aluminum:      new THREE.MeshStandardMaterial({ color: 0xcfd6e0, roughness: 0.24, metalness: 0.86 }),
     nylonWhite:    new THREE.MeshStandardMaterial({ color: 0xf2f5f9, roughness: 0.36, metalness: 0.03 }),
-    pcbBlack:      new THREE.MeshStandardMaterial({ color: 0x171b22, roughness: 0.44, metalness: 0.12 }),
-    pcbBlue:       new THREE.MeshStandardMaterial({ color: 0x124078, roughness: 0.42, metalness: 0.12 }),
-    pcbPurple:     new THREE.MeshStandardMaterial({ color: 0x4f2673, roughness: 0.42, metalness: 0.12 }),
-    pcbGreen:      new THREE.MeshStandardMaterial({ color: 0x15653c, roughness: 0.44, metalness: 0.12 }),
+    pcbGreenPlain: new THREE.MeshStandardMaterial({ color: 0x15653c, roughness: 0.44, metalness: 0.12 }),
+    pcbBlackPlain: new THREE.MeshStandardMaterial({ color: 0x171b22, roughness: 0.44, metalness: 0.12 }),
     icEpoxy:       new THREE.MeshStandardMaterial({ color: 0x14171c, roughness: 0.48, metalness: 0.15 }),
-    ferrite:       new THREE.MeshStandardMaterial({ color: 0x262a32, roughness: 0.56, metalness: 0.22 }),
     ceramicCap:    new THREE.MeshStandardMaterial({ color: 0xb58852, roughness: 0.38, metalness: 0.10 }),
     termGreen:     new THREE.MeshStandardMaterial({ color: 0x1f8b4c, roughness: 0.40, metalness: 0.05 }),
     hdrYellow:     new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.42, metalness: 0.04 }),
     hdrRed:        new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.42, metalness: 0.04 }),
     hdrBlack:      new THREE.MeshStandardMaterial({ color: 0x181b20, roughness: 0.48, metalness: 0.04 }),
-    liIonBlue:     new THREE.MeshStandardMaterial({ color: 0x1b569e, roughness: 0.28, metalness: 0.32 }),
-    capSleeve:     new THREE.MeshStandardMaterial({ color: 0x172554, roughness: 0.32, metalness: 0.25 }),
     fpcGold:       new THREE.MeshStandardMaterial({ color: 0xd98a2b, roughness: 0.34, metalness: 0.45, side: THREE.DoubleSide }),
     speakerCone:   new THREE.MeshStandardMaterial({ color: 0x1e2229, roughness: 0.72, metalness: 0.06, side: THREE.DoubleSide }),
-    lensGlass:     new THREE.MeshPhysicalMaterial({ color: 0x0a2540, roughness: 0.04, metalness: 0.10, clearcoat: 1.0, reflectivity: 0.95 }),
+    lensGlass:     new THREE.MeshPhysicalMaterial({ color: 0x0c345a, roughness: 0.04, metalness: 0.08, transparent: true, opacity: 0.76, clearcoat: 1.0 }),
     tofWindow:     new THREE.MeshPhysicalMaterial({ color: 0x2b1222, roughness: 0.08, metalness: 0.20, clearcoat: 1.0 }),
 
-    // Silicone Wire Insulation Palette
-    wireVbatRed:   new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.52, metalness: 0.04 }),
-    wireGndBlack:  new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.55, metalness: 0.04 }),
-    wireServo5v6:  new THREE.MeshStandardMaterial({ color: 0xea580c, roughness: 0.50, metalness: 0.04 }),
-    wireLogic5v0:  new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.50, metalness: 0.04 }),
-    wireI2cSda:    new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.48, metalness: 0.04 }),
-    wireI2cScl:    new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.48, metalness: 0.04 }),
-    wireI2sAudio:  new THREE.MeshStandardMaterial({ color: 0x7c3aed, roughness: 0.48, metalness: 0.04 }),
-    wirePwmSig:    new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.50, metalness: 0.04 }),
+    // Color-Coded Silicone Wire Insulation Palette
+    wireVbatRed:   new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.50, metalness: 0.04 }),
+    wireGndBlack:  new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.54, metalness: 0.04 }),
+    wireServo5v6:  new THREE.MeshStandardMaterial({ color: 0xea580c, roughness: 0.48, metalness: 0.04 }),
+    wireLogic5v0:  new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.48, metalness: 0.04 }),
+    wireI2cSda:    new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.46, metalness: 0.04 }),
+    wireI2cScl:    new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.46, metalness: 0.04 }),
+    wireI2sAudio:  new THREE.MeshStandardMaterial({ color: 0x7c3aed, roughness: 0.46, metalness: 0.04 }),
+    wirePwmSig:    new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.48, metalness: 0.04 }),
+    wireSenseTeal: new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.48, metalness: 0.04 }),
   };
 }
 
+function addThreadRidges(group, mats, shaftLenMM) {
+  const nRings = Math.max(3, Math.floor(shaftLenMM / 0.85));
+  for (let i = 0; i < nRings; ++i) {
+    const ring = new THREE.Mesh(GEO_THREAD_RING, mats.darkSteel);
+    ring.position.z = -(0.8 + i * 0.8) * MM;
+    group.add(ring);
+  }
+}
+
 /**
- * DIN 912 M2 Stainless Socket-Head Cap Screw (head aligned at Z=0..+1.8mm, shaft along -Z).
+ * DIN 912 M2 Stainless Socket-Head Cap Screw + Flat DIN 125 Washer + Machined Thread Ridges.
  */
 export function createM2SocketBolt(mats, shaftLenMM = 6.0) {
   const g = new THREE.Group();
+  const washer = new THREE.Mesh(GEO_M2_WASHER, mats.stainless);
+  washer.rotation.x = Math.PI / 2;
+  washer.position.z = 0.18 * MM;
+  g.add(washer);
+
   const head = new THREE.Mesh(GEO_M2_HEAD, mats.stainless);
   head.rotation.x = Math.PI / 2;
-  head.position.z = 0.9 * MM;
+  head.position.z = 1.25 * MM;
   g.add(head);
 
   const hex = new THREE.Mesh(GEO_M2_HEX, mats.darkSteel);
   hex.rotation.x = Math.PI / 2;
-  hex.position.z = 1.45 * MM;
+  hex.position.z = 1.75 * MM;
   g.add(hex);
 
   const shaft = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.98 * MM, 0.95 * MM, shaftLenMM * MM, 12),
+    new THREE.CylinderGeometry(0.95 * MM, 0.92 * MM, shaftLenMM * MM, 12),
     mats.stainless
   );
   shaft.rotation.x = Math.PI / 2;
   shaft.position.z = -(shaftLenMM * 0.5) * MM;
   g.add(shaft);
+  addThreadRidges(g, mats, shaftLenMM);
   return g;
 }
 
 /**
- * M2 Pan-Head Machine/Self-Tapping Screw (head at Z=0..+1.2mm, shaft along -Z).
+ * M2 Pan-Head Cross-Recessed Screw + Flat Washer + Helical Thread Ridges.
  */
 export function createM2PanScrew(mats, shaftLenMM = 5.0) {
   const g = new THREE.Group();
+  const washer = new THREE.Mesh(GEO_M2_WASHER, mats.stainless);
+  washer.rotation.x = Math.PI / 2;
+  washer.position.z = 0.16 * MM;
+  g.add(washer);
+
   const head = new THREE.Mesh(GEO_M2_PAN, mats.stainless);
   head.rotation.x = Math.PI / 2;
-  head.position.z = 0.6 * MM;
+  head.position.z = 0.9 * MM;
   g.add(head);
 
   const slot1 = new THREE.Mesh(new THREE.BoxGeometry(2.1 * MM, 0.42 * MM, 0.35 * MM), mats.darkSteel);
-  slot1.position.z = 1.15 * MM;
+  slot1.position.z = 1.45 * MM;
   g.add(slot1);
   const slot2 = new THREE.Mesh(new THREE.BoxGeometry(0.42 * MM, 2.1 * MM, 0.35 * MM), mats.darkSteel);
-  slot2.position.z = 1.15 * MM;
+  slot2.position.z = 1.45 * MM;
   g.add(slot2);
 
   const shaft = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.95 * MM, 0.85 * MM, shaftLenMM * MM, 10),
+    new THREE.CylinderGeometry(0.92 * MM, 0.82 * MM, shaftLenMM * MM, 10),
     mats.stainless
   );
   shaft.rotation.x = Math.PI / 2;
   shaft.position.z = -(shaftLenMM * 0.5) * MM;
   g.add(shaft);
+  addThreadRidges(g, mats, Math.min(shaftLenMM, 4.5));
   return g;
 }
 
 /**
- * Opposing Coaxial Ø4.0 mm Dual-Shear Flanged Brass Sleeve Bushing + Retaining Washer.
- * Local origin at joint bore face, axis along +Z.
+ * Opposing Coaxial Ø4.0 mm Dual-Shear Flanged Brass Sleeve Bushing + Retaining Circlip & Pin.
  */
 export function createDualShearBushing(mats) {
   const g = new THREE.Group();
-  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(2.0 * MM, 2.0 * MM, 3.8 * MM, 18), mats.brass);
+  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(2.0 * MM, 2.0 * MM, 3.8 * MM, 20), mats.brass);
   sleeve.rotation.x = Math.PI / 2;
   sleeve.position.z = -1.9 * MM;
   g.add(sleeve);
 
-  const flange = new THREE.Mesh(new THREE.CylinderGeometry(3.3 * MM, 3.3 * MM, 0.7 * MM, 18), mats.brass);
+  const flange = new THREE.Mesh(new THREE.CylinderGeometry(3.4 * MM, 3.4 * MM, 0.75 * MM, 20), mats.brass);
   flange.rotation.x = Math.PI / 2;
-  flange.position.z = 0.35 * MM;
+  flange.position.z = 0.38 * MM;
   g.add(flange);
 
-  const pin = new THREE.Mesh(new THREE.CylinderGeometry(1.35 * MM, 1.35 * MM, 4.6 * MM, 14), mats.stainless);
+  const circlip = new THREE.Mesh(new THREE.TorusGeometry(2.1 * MM, 0.28 * MM, 8, 18, Math.PI * 1.65), mats.darkSteel);
+  circlip.position.z = 0.85 * MM;
+  g.add(circlip);
+
+  const pin = new THREE.Mesh(new THREE.CylinderGeometry(1.35 * MM, 1.35 * MM, 4.8 * MM, 16), mats.stainless);
   pin.rotation.x = Math.PI / 2;
-  pin.position.z = -1.6 * MM;
+  pin.position.z = -1.5 * MM;
   g.add(pin);
   return g;
 }
 
 /**
- * Molded Servo Horn + Central M2x5 Retaining Screw + Radial Self-Tapping Screws.
- * Attached to the CHILD moving link so it rotates coaxially with the limb!
- * Local origin (0,0,0) = joint center, spline bore along -Z, horn arm along +X.
+ * Molded Servo Horn + Central M2x5 Retaining Screw + Radial Locking Screws.
  */
 export function createServoHornAssembly(mats, { isSG90 = false, armLenMM = 12.0, doubleArm = false } = {}) {
   const g = new THREE.Group();
   const hornMat = isSG90 ? mats.nylonWhite : mats.anodizedBlack;
 
-  // Spline hub barrel
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(3.5 * MM, 3.5 * MM, 3.2 * MM, 18), hornMat);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(3.55 * MM, 3.55 * MM, 3.2 * MM, 20), hornMat);
   hub.rotation.x = Math.PI / 2;
   hub.position.z = 0.4 * MM;
   g.add(hub);
 
   const arms = doubleArm ? [-1, 1] : [1];
   for (const dir of arms) {
-    const armGeo = new THREE.BoxGeometry(armLenMM * MM, 4.6 * MM, 1.8 * MM);
-    const arm = new THREE.Mesh(armGeo, hornMat);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(armLenMM * MM, 4.6 * MM, 1.85 * MM), hornMat);
     arm.position.set(dir * (armLenMM * 0.5) * MM, 0, 1.1 * MM);
     g.add(arm);
 
-    const tip = new THREE.Mesh(new THREE.CylinderGeometry(2.1 * MM, 2.1 * MM, 1.8 * MM, 14), hornMat);
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(2.15 * MM, 2.15 * MM, 1.85 * MM, 16), hornMat);
     tip.rotation.x = Math.PI / 2;
     tip.position.set(dir * armLenMM * MM, 0, 1.1 * MM);
     g.add(tip);
 
-    // Radial horn locking screw
     const rScrew = createM2PanScrew(mats, 3.6);
     rScrew.position.set(dir * (armLenMM - 2.2) * MM, 0, 2.0 * MM);
     g.add(rScrew);
   }
 
-  // Central M2x5 spline retaining machine screw
   const centerScrew = createM2PanScrew(mats, 4.8);
   centerScrew.position.z = 2.1 * MM;
   g.add(centerScrew);
@@ -274,13 +393,10 @@ export function createServoHornAssembly(mats, { isSG90 = false, armLenMM = 12.0,
 }
 
 /**
- * Ultra-Detailed MG90S (Metal-Gear) / SG90 (Translucent Nylon-Gear) Micro Servo.
- * CRITICAL KINEMATIC CONVENTION:
- *   - Local Origin (0, 0, 0) = EXACT Output Spline Joint Axis at the top bearing face!
- *   - Output 21T Brass/Nylon Spline points along +Z (0 .. +3.2 mm).
- *   - Housing body center is offset along -X by 5.5 mm (22.8/2 - 5.9 = 5.5 mm),
- *     guaranteeing 0.00 mm coaxial alignment on all 12 robot joints!
- *   - Includes full INTERNAL 4-stage reduction gear train + coreless DC motor + potentiometer + driver PCB!
+ * Watchmaker-Grade MG90S / SG90 Micro Servo with TRUE INVOLUTE SPUR GEAR TRAIN & LIVE KINEMATICS!
+ *   - Output 21T serrated spline at (0, 0, 0) along +Z
+ *   - 4 meshing toothed gear stages (9T Pinion -> 18T Stage1 -> 22T Stage2 -> 28T Webbed Output Gear)
+ *   - Exposes `root.userData.updateGearTrain(jointAngleRad)` so gears spin live during walking!
  */
 export function createPrecisionServo(mats, isSG90 = false) {
   const root = new THREE.Group();
@@ -289,9 +405,9 @@ export function createPrecisionServo(mats, isSG90 = false) {
   const bodyL = (isSG90 ? 22.5 : 22.8) * MM;
   const bodyW = (isSG90 ? 12.0 : 12.2) * MM;
   const bodyH = (isSG90 ? 19.5 : 21.5) * MM;
-  const xOff = -5.5 * MM; // Exact shaft-to-body-center offset
+  const xOff = -5.5 * MM;
 
-  // 1. Outer Housing (clipped cleanly in Section Cutaway mode!)
+  // 1. Outer Housing (with case split seam & 4 bottom M1.7 tie bolts)
   const housingGroup = new THREE.Group();
   root.add(housingGroup);
 
@@ -300,7 +416,6 @@ export function createPrecisionServo(mats, isSG90 = false) {
   mainCase.castShadow = true;
   housingGroup.add(mainCase);
 
-  // Upper gearbox step + output bearing boss
   const topCap = new THREE.Mesh(new THREE.BoxGeometry(bodyL, bodyW, 3.4 * MM), caseMat);
   topCap.position.set(xOff, 0, -1.8 * MM);
   housingGroup.add(topCap);
@@ -313,18 +428,17 @@ export function createPrecisionServo(mats, isSG90 = false) {
   bearingDome.position.set(0, 0, -1.2 * MM);
   housingGroup.add(bearingDome);
 
-  const auxDome = new THREE.Mesh(new THREE.CylinderGeometry(2.9 * MM, 2.9 * MM, 2.4 * MM, 16), caseMat);
-  auxDome.rotation.x = Math.PI / 2;
-  auxDome.position.set(-5.8 * MM, 0, -1.0 * MM);
-  housingGroup.add(auxDome);
+  // Exposed Sealed Ball Bearing Race at Output Shaft!
+  const ballBearing = new THREE.Mesh(new THREE.TorusGeometry(3.2 * MM, 0.65 * MM, 10, 22), mats.stainless);
+  ballBearing.position.set(0, 0, -0.1 * MM);
+  root.add(ballBearing);
 
-  // Dual Mounting Ears (32.2 mm span, 27.6 mm M2 hole centers)
   const flange = new THREE.Mesh(new THREE.BoxGeometry(32.2 * MM, bodyW, 2.4 * MM), caseMat);
   flange.position.set(xOff, 0, -8.2 * MM);
   housingGroup.add(flange);
 
   for (const dx of [-13.8, 13.8]) {
-    const eyelet = new THREE.Mesh(new THREE.CylinderGeometry(1.7 * MM, 1.7 * MM, 2.6 * MM, 14), mats.brass);
+    const eyelet = new THREE.Mesh(new THREE.CylinderGeometry(1.8 * MM, 1.8 * MM, 2.6 * MM, 14), mats.brass);
     eyelet.rotation.x = Math.PI / 2;
     eyelet.position.set(xOff + dx * MM, 0, -8.2 * MM);
     root.add(eyelet);
@@ -334,96 +448,120 @@ export function createPrecisionServo(mats, isSG90 = false) {
     root.add(mScrew);
   }
 
-  // 2. Output 21-Tooth Spline (Uncut!)
-  const spline = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.45 * MM, 2.45 * MM, 3.4 * MM, 20),
-    isSG90 ? mats.nylonWhite : mats.brass
-  );
-  spline.rotation.x = Math.PI / 2;
-  spline.position.set(0, 0, 1.6 * MM);
-  root.add(spline);
+  // 4x Bottom Case Assembly Tie-Bolts
+  for (const cx of [-10.0, 10.0]) {
+    for (const cy of [-4.8, 4.8]) {
+      const cBolt = new THREE.Mesh(new THREE.CylinderGeometry(0.8 * MM, 0.8 * MM, 0.8 * MM, 10), mats.stainless);
+      cBolt.rotation.x = Math.PI / 2;
+      cBolt.position.set(xOff + cx * MM, cy * MM, -3.5 * MM - bodyH - 0.3 * MM);
+      root.add(cBolt);
+    }
+  }
 
-  // 3. Internal Anatomy: Coreless DC Motor + 4-Stage Spur Gear Train + Potentiometer + Driver PCB!
+  // 2. True 21-Tooth Serrated Output Spline (rotates with output gear!)
+  const splineGeo = getSpurGearGeometry(21, 2.35, 3.4, 0.85, false);
+  const splineMesh = new THREE.Mesh(splineGeo, isSG90 ? mats.nylonWhite : mats.brass);
+  splineMesh.position.set(0, 0, 1.65 * MM);
+  root.add(splineMesh);
+
+  // 3. Internal Anatomy: Coreless DC Motor + 4-Stage Toothed Involute Spur Gear Train!
   const internals = new THREE.Group();
   root.add(internals);
 
-  // Coreless Brushed DC Motor (Ø9.8 x 13.5 mm steel can)
-  const motorCan = new THREE.Mesh(new THREE.CylinderGeometry(4.8 * MM, 4.8 * MM, 13.2 * MM, 20), mats.stainless);
+  const motorCan = new THREE.Mesh(new THREE.CylinderGeometry(4.8 * MM, 4.8 * MM, 13.2 * MM, 22), mats.stainless);
   motorCan.rotation.x = Math.PI / 2;
   motorCan.position.set(-10.6 * MM, 0, -15.5 * MM);
   internals.add(motorCan);
 
-  const motorEndbell = new THREE.Mesh(new THREE.CylinderGeometry(4.6 * MM, 4.6 * MM, 1.6 * MM, 16), mats.copper);
+  // Internal copper rotor armature windings visible at motor top vent
+  const copperRotor = new THREE.Mesh(new THREE.CylinderGeometry(3.8 * MM, 3.8 * MM, 2.2 * MM, 18), mats.copper);
+  copperRotor.rotation.x = Math.PI / 2;
+  copperRotor.position.set(-10.6 * MM, 0, -8.9 * MM);
+  internals.add(copperRotor);
+
+  const motorEndbell = new THREE.Mesh(new THREE.CylinderGeometry(4.6 * MM, 4.6 * MM, 1.6 * MM, 18), mats.copper);
   motorEndbell.rotation.x = Math.PI / 2;
   motorEndbell.position.set(-10.6 * MM, 0, -22.2 * MM);
   internals.add(motorEndbell);
 
-  // Stage 0: Motor Brass Pinion
-  const pinion = new THREE.Mesh(new THREE.CylinderGeometry(1.3 * MM, 1.3 * MM, 3.2 * MM, 12), mats.brass);
-  pinion.rotation.x = Math.PI / 2;
-  pinion.position.set(-10.6 * MM, 0, -7.2 * MM);
-  internals.add(pinion);
+  // Stage 0: 9T High-Speed Motor Brass Pinion
+  const gPinion = new THREE.Mesh(getSpurGearGeometry(9, 1.35, 3.0, 0.45, false), mats.brass);
+  gPinion.position.set(-10.6 * MM, 0, -7.0 * MM);
+  internals.add(gPinion);
 
-  // Stage 1..3: Stepped Spur Reduction Gears + Stainless Axles
-  const gearSpecs = [
-    { x: -8.2, y:  1.6, z: -6.8, rBig: 3.6, rPin: 1.3 },
-    { x: -5.2, y: -1.5, z: -5.2, rBig: 4.1, rPin: 1.5 },
-    { x:  0.0, y:  0.0, z: -3.4, rBig: 5.1, rPin: 2.2 }, // Main output spur gear concentric with shaft!
-  ];
-  for (const gs of gearSpecs) {
-    const gBig = new THREE.Mesh(
-      new THREE.CylinderGeometry(gs.rBig * MM, gs.rBig * MM, 1.5 * MM, 20),
-      gearMat
-    );
-    gBig.rotation.x = Math.PI / 2;
-    gBig.position.set(gs.x * MM, gs.y * MM, gs.z * MM);
-    internals.add(gBig);
+  // Stage 1: 18T Intermediate Spur + 9T Compound Pinion
+  const gStage1 = new THREE.Group();
+  gStage1.position.set(-7.9 * MM, 1.6 * MM, -6.5 * MM);
+  gStage1.add(new THREE.Mesh(getSpurGearGeometry(18, 3.2, 1.4, 0.55, false), gearMat));
+  const s1Pin = new THREE.Mesh(getSpurGearGeometry(9, 1.3, 2.8, 0.50, false), mats.darkSteel);
+  s1Pin.position.z = 1.2 * MM;
+  gStage1.add(s1Pin);
+  internals.add(gStage1);
 
-    const gSub = new THREE.Mesh(
-      new THREE.CylinderGeometry(gs.rPin * MM, gs.rPin * MM, 2.8 * MM, 14),
-      mats.darkSteel
-    );
-    gSub.rotation.x = Math.PI / 2;
-    gSub.position.set(gs.x * MM, gs.y * MM, (gs.z - 0.8) * MM);
-    internals.add(gSub);
+  // Stage 2: 22T Pre-Output Spur + 10T Compound Pinion
+  const gStage2 = new THREE.Group();
+  gStage2.position.set(-4.9 * MM, -1.5 * MM, -5.0 * MM);
+  gStage2.add(new THREE.Mesh(getSpurGearGeometry(22, 3.8, 1.5, 0.60, false), gearMat));
+  const s2Pin = new THREE.Mesh(getSpurGearGeometry(10, 1.5, 2.6, 0.55, false), mats.darkSteel);
+  s2Pin.position.z = 1.3 * MM;
+  gStage2.add(s2Pin);
+  internals.add(gStage2);
+
+  // Stage 3: 28T Webbed Main Output Spur Gear concentric with shaft (0, 0, -3.3 mm)!
+  const gOutput = new THREE.Mesh(getSpurGearGeometry(28, 4.9, 1.7, 1.1, true), gearMat);
+  gOutput.position.set(0, 0, -3.3 * MM);
+  internals.add(gOutput);
+
+  // Stainless Ground Gear Axles
+  for (const ax of [[-7.9, 1.6], [-4.9, -1.5]]) {
+    const pinAxle = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * MM, 0.55 * MM, 6.2 * MM, 10), mats.stainless);
+    pinAxle.rotation.x = Math.PI / 2;
+    pinAxle.position.set(ax[0] * MM, ax[1] * MM, -5.2 * MM);
+    internals.add(pinAxle);
   }
 
-  // Feedback Rotary Potentiometer beneath output gear
-  const potBody = new THREE.Mesh(new THREE.CylinderGeometry(3.8 * MM, 3.8 * MM, 4.6 * MM, 16), mats.anodizedBlack);
+  // Rotary Feedback Potentiometer + Wiper Shaft + H-Bridge Servo Control PCB
+  const potBody = new THREE.Mesh(new THREE.CylinderGeometry(3.8 * MM, 3.8 * MM, 4.6 * MM, 18), mats.anodizedBlack);
   potBody.rotation.x = Math.PI / 2;
   potBody.position.set(0, 0, -10.2 * MM);
   internals.add(potBody);
 
-  // Internal H-Bridge Servo Control PCB
-  const ctrlPcb = new THREE.Mesh(new THREE.BoxGeometry(9.5 * MM, 9.8 * MM, 1.2 * MM), mats.pcbGreen);
+  const ctrlPcb = new THREE.Mesh(new THREE.BoxGeometry(9.6 * MM, 9.8 * MM, 1.2 * MM), mats.pcbBuck);
   ctrlPcb.position.set(-1.2 * MM, 0, -19.5 * MM);
   internals.add(ctrlPcb);
-  const driverIc = new THREE.Mesh(new THREE.BoxGeometry(3.6 * MM, 3.0 * MM, 1.0 * MM), mats.icEpoxy);
+  const driverIc = new THREE.Mesh(new THREE.BoxGeometry(3.8 * MM, 3.2 * MM, 1.0 * MM), mats.icLaser);
   driverIc.position.set(-1.2 * MM, 0, -18.5 * MM);
   internals.add(driverIc);
 
-  // Strain-relief 3-wire JR Silicone Ribbon Boot (Brown GND / Red 5.6V / Amber PWM)
   const boot = new THREE.Mesh(new THREE.BoxGeometry(3.2 * MM, 4.4 * MM, 2.8 * MM), mats.soleSilicone);
   boot.position.set(xOff - bodyL * 0.5 - 1.2 * MM, 0, -21.0 * MM);
   internals.add(boot);
+
+  // Live Meshing Gear Ratio Hook!
+  root.userData.updateGearTrain = (thetaRad) => {
+    splineMesh.rotation.z = thetaRad;
+    gOutput.rotation.z    = thetaRad;
+    gStage2.rotation.z    = -thetaRad * 3.8 + 0.15;
+    gStage1.rotation.z    =  thetaRad * 15.2;
+    gPinion.rotation.z    = -thetaRad * 62.0;
+    copperRotor.rotation.y = -thetaRad * 62.0;
+  };
 
   return root;
 }
 
 /**
- * Seeed Studio XIAO ESP32S3 Sense (21.0 x 17.8 x 15.0 mm, 6.5 g)
- * Includes: Main PCB, 14 gold castellated pads, USB-C port, ESP32-S3R8 RF shield,
- * 25-pin CNC Black Anodized Heatsink, B2B Sense Expansion Board, MSM261 PDM Digital Mic,
- * MicroSD cage, U.FL + FPC 2.4GHz Antenna, Golden 24-pin DVP Flex, and Multi-Element OV5640 Lens!
+ * Seeed Studio XIAO ESP32S3 Sense with Under-Shield Silicon SoC, Crystal, TIM Pad,
+ * 25-Pin CNC Heatsink, Silkscreened PCB, EPDM Mic Gasket, and 3-Element OV5640 Optical Stack!
  */
 export function createXiaoESP32S3SenseAssembly(mats) {
   const g = new THREE.Group();
 
-  // 1. Main XIAO ESP32S3 4-Layer Matte-Black PCB (21.0 mm Z x 17.8 mm Y x 1.6 mm X)
-  const mainPcb = new THREE.Mesh(new THREE.BoxGeometry(1.6 * MM, 17.8 * MM, 21.0 * MM), mats.pcbBlack);
+  // 1. Main Silkscreened XIAO ESP32S3 4-Layer PCB
+  const mainPcb = new THREE.Mesh(new THREE.BoxGeometry(1.6 * MM, 17.8 * MM, 21.0 * MM), mats.pcbXIAO);
   g.add(mainPcb);
 
-  // 14x Gold Castellated Half-Holes (7 per side, 2.54 mm pitch: D0..D6 & 5V,GND,3V3,D10..D7)
+  // 14x Gold Castellated Half-Holes
   for (const side of [-1, 1]) {
     for (let i = -3; i <= 3; ++i) {
       const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.85 * MM, 0.85 * MM, 1.75 * MM, 12), mats.gold);
@@ -433,7 +571,7 @@ export function createXiaoESP32S3SenseAssembly(mats) {
     }
   }
 
-  // Top Rolled Stainless USB Type-C Receptacle (facing +Z inside upper cranium)
+  // Top Rolled Stainless USB Type-C Receptacle + 2x Micro Tactile Reset/Boot Buttons
   const usbShell = new THREE.Mesh(new THREE.BoxGeometry(3.2 * MM, 8.94 * MM, 7.3 * MM), mats.stainless);
   usbShell.position.set(2.2 * MM, 0, 8.2 * MM);
   g.add(usbShell);
@@ -441,72 +579,107 @@ export function createXiaoESP32S3SenseAssembly(mats) {
   usbTongue.position.set(2.2 * MM, 0, 9.8 * MM);
   g.add(usbTongue);
 
-  // ESP32-S3R8 Nickel RF Shield Can on rear (-X) + CNC 5x5 Pin-Fin Anodized Aluminum Heatsink
-  const rfShield = new THREE.Mesh(new THREE.BoxGeometry(2.2 * MM, 12.2 * MM, 12.2 * MM), mats.stainless);
+  for (const sy of [-6.2, 6.2]) {
+    const btn = new THREE.Mesh(new THREE.BoxGeometry(1.1 * MM, 2.6 * MM, 1.8 * MM), mats.gold);
+    btn.position.set(1.2 * MM, sy * MM, 8.2 * MM);
+    g.add(btn);
+  }
+
+  // UNDER-SHIELD SILICON ANATOMY (revealed when RF shield turns translucent in X-Ray / Section mode!):
+  // Espressif ESP32-S3R8 Dual-Core QFN-56 SoC + 8MB SPI NOR Flash + 40MHz Crystal Oscillator!
+  const espSoc = new THREE.Mesh(new THREE.BoxGeometry(0.95 * MM, 7.0 * MM, 7.0 * MM), mats.icLaser);
+  espSoc.position.set(-1.3 * MM, 0, -1.2 * MM);
+  g.add(espSoc);
+  const flashIc = new THREE.Mesh(new THREE.BoxGeometry(0.85 * MM, 4.0 * MM, 3.0 * MM), mats.icEpoxy);
+  flashIc.position.set(-1.25 * MM, -2.5 * MM, -5.8 * MM);
+  g.add(flashIc);
+  const xtal40M = new THREE.Mesh(new THREE.BoxGeometry(0.75 * MM, 2.5 * MM, 3.2 * MM), mats.gold);
+  xtal40M.position.set(-1.2 * MM, 3.2 * MM, -5.8 * MM);
+  g.add(xtal40M);
+
+  // Nickel RF Shield Can + Sky-Blue 0.5mm Silicone Thermal Interface Pad (TIM) + 25-Pin CNC Heatsink!
+  const rfShield = new THREE.Mesh(new THREE.BoxGeometry(2.2 * MM, 12.2 * MM, 12.2 * MM), mats.rfShieldGhostable);
   rfShield.position.set(-1.9 * MM, 0, -1.5 * MM);
   g.add(rfShield);
 
-  const hsBase = new THREE.Mesh(new THREE.BoxGeometry(1.6 * MM, 13.6 * MM, 13.6 * MM), mats.anodizedBlack);
-  hsBase.position.set(-3.8 * MM, 0, -1.5 * MM);
+  const timPad = new THREE.Mesh(new THREE.BoxGeometry(0.55 * MM, 12.0 * MM, 12.0 * MM), mats.timPadBlue);
+  timPad.position.set(-3.25 * MM, 0, -1.5 * MM);
+  g.add(timPad);
+
+  const hsBase = new THREE.Mesh(new THREE.BoxGeometry(1.5 * MM, 13.6 * MM, 13.6 * MM), mats.anodizedBlack);
+  hsBase.position.set(-4.2 * MM, 0, -1.5 * MM);
   g.add(hsBase);
 
-  // 25 individual CNC cooling pins aligned with head_shell.scad rear chimney exhaust vents!
   for (let iy = -2; iy <= 2; ++iy) {
     for (let iz = -2; iz <= 2; ++iz) {
       const fin = new THREE.Mesh(GEO_HEATSINK_PIN, mats.anodizedBlack);
-      fin.position.set(-6.2 * MM, iy * 2.6 * MM, (-1.5 + iz * 2.6) * MM);
+      fin.position.set(-6.6 * MM, iy * 2.6 * MM, (-1.5 + iz * 2.6) * MM);
       g.add(fin);
     }
   }
 
-  // 2. High-Density B2B Connector + Sense Expansion Daughterboard (+X side)
+  // 2. B2B Mezzanine Connector + Sense Expansion Daughterboard
   const b2b = new THREE.Mesh(new THREE.BoxGeometry(2.8 * MM, 10.0 * MM, 4.2 * MM), mats.icEpoxy);
   b2b.position.set(2.2 * MM, 0, -4.5 * MM);
   g.add(b2b);
 
-  const sensePcb = new THREE.Mesh(new THREE.BoxGeometry(1.6 * MM, 17.8 * MM, 21.0 * MM), mats.pcbBlack);
+  const sensePcb = new THREE.Mesh(new THREE.BoxGeometry(1.6 * MM, 17.8 * MM, 21.0 * MM), mats.pcbXIAO);
   sensePcb.position.set(4.4 * MM, 0, 0);
   g.add(sensePcb);
 
-  // Onboard MSM261D3526H1CPM PDM Digital Microphone (aligned with head_shell acoustic ports!)
+  // MSM261 PDM Digital Mic + Acoustic EPDM Isolation Foam Seal Ring
   const pdmMic = new THREE.Mesh(new THREE.BoxGeometry(1.1 * MM, 3.5 * MM, 2.65 * MM), mats.stainless);
   pdmMic.position.set(5.6 * MM, 0, 7.6 * MM);
   g.add(pdmMic);
-  const micPort = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * MM, 0.55 * MM, 1.2 * MM, 12), mats.gold);
-  micPort.rotation.z = Math.PI / 2;
-  micPort.position.set(5.7 * MM, 0, 7.6 * MM);
-  g.add(micPort);
+  const micGasket = new THREE.Mesh(new THREE.TorusGeometry(2.2 * MM, 0.65 * MM, 10, 20), mats.soleSilicone);
+  micGasket.rotation.y = Math.PI / 2;
+  micGasket.position.set(6.3 * MM, 0, 7.6 * MM);
+  g.add(micGasket);
 
-  // MicroSD Card Stainless Slot on Sense board
   const sdSlot = new THREE.Mesh(new THREE.BoxGeometry(1.8 * MM, 11.5 * MM, 11.0 * MM), mats.stainless);
   sdSlot.position.set(2.8 * MM, 0, 2.0 * MM);
   g.add(sdSlot);
 
-  // 3. OV5640 / OV3660 Camera Sensor + Golden 24-pin DVP FPC Ribbon + Multi-Coated Objective Lens
+  // 3. OV5640 / OV3660 Internal Optical Cross-Section:
+  // Iridescent CMOS Wafer Die + 650nm IR-Cut Filter + 3 Stacked Optical Glass Elements inside M7 Barrel!
   const fpcRibbon = new THREE.Mesh(new THREE.BoxGeometry(0.35 * MM, 8.0 * MM, 11.5 * MM), mats.fpcGold);
   fpcRibbon.position.set(5.5 * MM, 0, -2.5 * MM);
   g.add(fpcRibbon);
 
-  const camBase = new THREE.Mesh(new THREE.BoxGeometry(3.2 * MM, 8.5 * MM, 8.5 * MM), mats.anodizedBlack);
+  const camBase = new THREE.Mesh(new THREE.BoxGeometry(3.2 * MM, 8.5 * MM, 8.5 * MM), mats.camBarrelClip);
   camBase.position.set(6.8 * MM, 0, 0);
   g.add(camBase);
 
-  const lensBarrel = new THREE.Mesh(new THREE.CylinderGeometry(4.0 * MM, 4.2 * MM, 4.6 * MM, 28), mats.anodizedBlack);
+  const cmosDie = new THREE.Mesh(new THREE.BoxGeometry(0.4 * MM, 5.2 * MM, 4.0 * MM), mats.cmosWafer);
+  cmosDie.position.set(6.0 * MM, 0, 0);
+  g.add(cmosDie);
+
+  const irFilter = new THREE.Mesh(new THREE.BoxGeometry(0.35 * MM, 5.8 * MM, 5.8 * MM), mats.irCutFilter);
+  irFilter.position.set(7.4 * MM, 0, 0);
+  g.add(irFilter);
+
+  const lensBarrel = new THREE.Mesh(new THREE.CylinderGeometry(4.0 * MM, 4.2 * MM, 4.6 * MM, 28), mats.camBarrelClip);
   lensBarrel.rotation.z = Math.PI / 2;
   lensBarrel.position.set(9.4 * MM, 0, 0);
   g.add(lensBarrel);
+
+  // 3 internal multi-coated optical glass elements along optical axis X = 8.4, 9.6, 10.9 mm!
+  for (const [lx, lr] of [[8.4, 2.3], [9.6, 2.55], [10.9, 2.85]]) {
+    const el = new THREE.Mesh(
+      new THREE.SphereGeometry(lr * MM, 22, 14, 0, Math.PI * 2, 0, Math.PI * 0.45),
+      mats.lensGlass
+    );
+    el.rotation.z = -Math.PI / 2;
+    el.position.set(lx * MM, 0, 0);
+    g.add(el);
+  }
 
   const lensBezel = new THREE.Mesh(new THREE.TorusGeometry(3.3 * MM, 0.45 * MM, 12, 24), mats.aluminum);
   lensBezel.rotation.y = Math.PI / 2;
   lensBezel.position.set(11.6 * MM, 0, 0);
   g.add(lensBezel);
 
-  const lensGlass = new THREE.Mesh(new THREE.SphereGeometry(2.85 * MM, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.42), mats.lensGlass);
-  lensGlass.rotation.z = -Math.PI / 2;
-  lensGlass.position.set(10.8 * MM, 0, 0);
-  g.add(lensGlass);
-
-  // 4. U.FL Coax + 2.4 GHz Wi-Fi/BLE FPC Dipole Antenna along cranium inner wall (+Y)
+  // 4. U.FL Coax + 2.4 GHz Wi-Fi/BLE FPC Dipole Antenna
   const ufl = new THREE.Mesh(new THREE.CylinderGeometry(1.1 * MM, 1.1 * MM, 1.0 * MM, 12), mats.gold);
   ufl.rotation.z = Math.PI / 2;
   ufl.position.set(-1.1 * MM, 6.2 * MM, -7.8 * MM);
@@ -520,15 +693,13 @@ export function createXiaoESP32S3SenseAssembly(mats) {
 }
 
 /**
- * VL53L0X (GY-530) 940 nm Laser Time-of-Flight Sensor (13.3 x 10.5 x 3.0 mm, I2C 0x29).
- * Shows distinct dual optical cavities: VCSEL 940nm emitter + SPAD photon detector array!
+ * VL53L0X (GY-530) 940 nm Laser Time-of-Flight Sensor with Silkscreened Purple PCB & Dual Cavities.
  */
 export function createVL53L0XAssembly(mats) {
   const g = new THREE.Group();
   const pcb = new THREE.Mesh(new THREE.BoxGeometry(1.6 * MM, 13.3 * MM, 10.5 * MM), mats.pcbPurple);
   g.add(pcb);
 
-  // 2x M2 Mounting Holes with Gold Annular Rings + M2 Screws
   for (const sy of [-4.8, 4.8]) {
     const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.6 * MM, 1.6 * MM, 1.7 * MM, 14), mats.gold);
     pad.rotation.z = Math.PI / 2;
@@ -536,21 +707,23 @@ export function createVL53L0XAssembly(mats) {
     g.add(pad);
   }
 
-  // Optical LGA-12 VL53L0X Package (4.4 x 2.4 x 1.1 mm) aligned at Z=0
   const lgaCap = new THREE.Mesh(new THREE.BoxGeometry(1.2 * MM, 4.4 * MM, 2.4 * MM), mats.icEpoxy);
   lgaCap.position.set(1.3 * MM, 0, 0);
   g.add(lgaCap);
 
-  // Dual Optical Apertures (VCSEL Emitter + SPAD Receiver)
-  for (const dy of [-1.05, 1.05]) {
-    const optic = new THREE.Mesh(new THREE.CylinderGeometry(0.65 * MM, 0.65 * MM, 0.4 * MM, 14), mats.tofWindow);
+  // Gold optical barrier septum between 940nm VCSEL emitter & SPAD receiver
+  const septum = new THREE.Mesh(new THREE.BoxGeometry(0.35 * MM, 0.45 * MM, 2.2 * MM), mats.gold);
+  septum.position.set(1.85 * MM, 0, 0);
+  g.add(septum);
+
+  for (const dy of [-1.1, 1.1]) {
+    const optic = new THREE.Mesh(new THREE.CylinderGeometry(0.68 * MM, 0.68 * MM, 0.4 * MM, 16), mats.tofWindow);
     optic.rotation.z = Math.PI / 2;
     optic.position.set(1.85 * MM, dy * MM, 0);
     g.add(optic);
   }
 
-  // SOT-23-5 2.8V LDO + I2C Level-Shifter MOSFETs
-  const ldo = new THREE.Mesh(new THREE.BoxGeometry(1.0 * MM, 2.9 * MM, 1.6 * MM), mats.icEpoxy);
+  const ldo = new THREE.Mesh(new THREE.BoxGeometry(1.0 * MM, 2.9 * MM, 1.6 * MM), mats.icLaser);
   ldo.position.set(-1.1 * MM, -2.5 * MM, 2.2 * MM);
   g.add(ldo);
   for (const dy of [-2.2, 2.2]) {
@@ -559,7 +732,6 @@ export function createVL53L0XAssembly(mats) {
     g.add(cap);
   }
 
-  // 6-Pin Right-Angle Header on rear (-X)
   for (let i = 0; i < 6; ++i) {
     const pin = new THREE.Mesh(GEO_PIN_GOLD, mats.gold);
     pin.rotation.y = Math.PI / 2;
@@ -571,40 +743,40 @@ export function createVL53L0XAssembly(mats) {
 }
 
 /**
- * PCA9685 16-Channel 12-Bit I2C PWM Servo Driver (62.0 x 25.0 x 12.0 mm, 8.5 g, I2C 0x40).
- * Oriented in Y-Z plane inside Torso: Y = -31..+31 mm, Z = -12.5..+12.5 mm, headers facing +X!
+ * PCA9685 16-Channel PWM Driver with Copper-Traced & Silkscreened PCB, TSSOP-28, & 48 Gold Pins.
  */
 export function createPCA9685Assembly(mats) {
   const g = new THREE.Group();
 
-  const pcb = new THREE.Mesh(new THREE.BoxGeometry(1.6 * MM, 62.0 * MM, 25.0 * MM), mats.pcbBlue);
+  const pcb = new THREE.Mesh(new THREE.BoxGeometry(1.6 * MM, 62.0 * MM, 25.0 * MM), mats.pcbPCA9685);
   pcb.castShadow = true;
   g.add(pcb);
 
-  // 4x Corner M2 Mounting Standoffs + Stainless Bolts
+  // 4x Corner Knurled Brass M2 Standoffs + Threaded Stainless Bolts
   for (const sy of [-28.5, 28.5]) {
     for (const sz of [-10.0, 10.0]) {
-      const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.1 * MM, 2.1 * MM, 1.7 * MM, 14), mats.gold);
-      pad.rotation.z = Math.PI / 2;
-      pad.position.set(0, sy * MM, sz * MM);
-      g.add(pad);
+      const standoff = new THREE.Mesh(new THREE.CylinderGeometry(2.0 * MM, 2.0 * MM, 3.2 * MM, 6), mats.brass);
+      standoff.rotation.z = Math.PI / 2;
+      standoff.position.set(-2.4 * MM, sy * MM, sz * MM);
+      g.add(standoff);
 
-      const bolt = createM2PanScrew(mats, 4.5);
+      const bolt = createM2PanScrew(mats, 4.8);
       bolt.rotation.y = Math.PI / 2;
-      bolt.position.set(1.0 * MM, sy * MM, sz * MM);
+      bolt.position.set(0.9 * MM, sy * MM, sz * MM);
       g.add(bolt);
     }
   }
 
-  // Central NXP PCA9685PW TSSOP-28 IC + Metallic Gull-Wing Leadframe
-  const icBody = new THREE.Mesh(new THREE.BoxGeometry(1.2 * MM, 9.7 * MM, 4.4 * MM), mats.icEpoxy);
+  // NXP PCA9685PW TSSOP-28 IC with individual pin comb visual
+  const icBody = new THREE.Mesh(new THREE.BoxGeometry(1.2 * MM, 9.7 * MM, 4.4 * MM), mats.icLaser);
   icBody.position.set(1.3 * MM, 0, 2.2 * MM);
   g.add(icBody);
-  const icLeads = new THREE.Mesh(new THREE.BoxGeometry(0.4 * MM, 9.4 * MM, 6.4 * MM), mats.stainless);
-  icLeads.position.set(1.0 * MM, 0, 2.2 * MM);
-  g.add(icLeads);
+  for (let p = 0; p < 14; ++p) {
+    const lead = new THREE.Mesh(new THREE.BoxGeometry(0.45 * MM, 0.32 * MM, 6.4 * MM), mats.stainless);
+    lead.position.set(1.0 * MM, (-4.22 + p * 0.65) * MM, 2.2 * MM);
+    g.add(lead);
+  }
 
-  // 4x Banks of 3x4 Color-Coded 2.54mm Servo Header Strips (PWM=Yellow, V+=Red, GND=Black) + 48 Gold Pins!
   const rowMats = [mats.hdrYellow, mats.hdrRed, mats.hdrBlack];
   const rowZ = [-3.6, -6.14, -8.68];
   let chIndex = 0;
@@ -623,7 +795,6 @@ export function createPCA9685Assembly(mats) {
         pin.position.set(3.8 * MM, py, rowZ[r] * MM);
         g.add(pin);
       }
-      // Channels CH0..CH11 have mated 3-pin servo DuPont housings plugged in!
       if (chIndex < 12) {
         const plug = new THREE.Mesh(new THREE.BoxGeometry(5.6 * MM, 2.35 * MM, 7.5 * MM), mats.hdrBlack);
         plug.position.set(6.2 * MM, py, -6.14 * MM);
@@ -633,7 +804,6 @@ export function createPCA9685Assembly(mats) {
     }
   }
 
-  // Top-Center 2-Pin Green Pluggable Screw Terminal Block (V+ 5.6V & GND)
   const termBlock = new THREE.Mesh(new THREE.BoxGeometry(7.5 * MM, 10.2 * MM, 8.0 * MM), mats.termGreen);
   termBlock.position.set(4.5 * MM, 0, 8.2 * MM);
   g.add(termBlock);
@@ -643,12 +813,11 @@ export function createPCA9685Assembly(mats) {
     g.add(screw);
   }
 
-  // Onboard Radial Bulk Decoupling Cap + 10k OE# Pull-Up SMD Array + Side I2C Header
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(3.2 * MM, 3.2 * MM, 7.0 * MM, 18), mats.capSleeve);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(3.2 * MM, 3.2 * MM, 7.0 * MM, 20), mats.capSleeve);
   cap.rotation.z = Math.PI / 2;
   cap.position.set(4.3 * MM, -14.5 * MM, 7.8 * MM);
   g.add(cap);
-  const capTop = new THREE.Mesh(new THREE.CylinderGeometry(3.0 * MM, 3.0 * MM, 0.3 * MM, 18), mats.aluminum);
+  const capTop = new THREE.Mesh(new THREE.CylinderGeometry(3.0 * MM, 3.0 * MM, 0.3 * MM, 20), mats.aluminum);
   capTop.rotation.z = Math.PI / 2;
   capTop.position.set(7.85 * MM, -14.5 * MM, 7.8 * MM);
   g.add(capTop);
@@ -664,24 +833,21 @@ export function createPCA9685Assembly(mats) {
 }
 
 /**
- * MPU-6050 (GY-521) 6-Axis MEMS IMU (15.8 x 20.5 x 3.2 mm, I2C 0x68) mounted on Pelvis CoM Cross-Tie Beam!
- * Includes QFN-24 MEMS die, SOT-23-5 LDO, 2x M2x5 mounting screws at Y=+-8.0mm, and 3D IMU/CoM Triad!
+ * MPU-6050 (GY-521) 6-Axis MEMS IMU at CoM with Silkscreened X/Y Reference Arrows & Brass Inserts.
  */
 export function createMPU6050CoMAssembly(mats) {
   const g = new THREE.Group();
 
-  const pcb = new THREE.Mesh(new THREE.BoxGeometry(15.8 * MM, 20.5 * MM, 1.6 * MM), mats.pcbBlue);
+  const pcb = new THREE.Mesh(new THREE.BoxGeometry(15.8 * MM, 20.5 * MM, 1.6 * MM), mats.pcbMPU6050);
   g.add(pcb);
 
-  // QFN-24 InvenSense MPU-6050 MEMS Die at exact center
-  const qfn = new THREE.Mesh(new THREE.BoxGeometry(4.0 * MM, 4.0 * MM, 0.95 * MM), mats.icEpoxy);
+  const qfn = new THREE.Mesh(new THREE.BoxGeometry(4.0 * MM, 4.0 * MM, 0.95 * MM), mats.icLaser);
   qfn.position.set(0, 0, 1.25 * MM);
   g.add(qfn);
-  const qfnPads = new THREE.Mesh(new THREE.BoxGeometry(4.5 * MM, 4.5 * MM, 0.3 * MM), mats.stainless);
+  const qfnPads = new THREE.Mesh(new THREE.BoxGeometry(4.6 * MM, 4.6 * MM, 0.3 * MM), mats.gold);
   qfnPads.position.set(0, 0, 0.92 * MM);
   g.add(qfnPads);
 
-  // 3.3V SOT-23-5 LDO + SMD Capacitors
   const ldo = new THREE.Mesh(new THREE.BoxGeometry(2.9 * MM, 1.6 * MM, 1.0 * MM), mats.icEpoxy);
   ldo.position.set(-4.2 * MM, 3.8 * MM, 1.2 * MM);
   g.add(ldo);
@@ -691,14 +857,17 @@ export function createMPU6050CoMAssembly(mats) {
     g.add(smd);
   }
 
-  // 2x M2x5 Stainless Mounting Screws into torso_chassis.scad pilot holes (Y = +-8.0 mm)!
   for (const sy of [-8.0, 8.0]) {
+    const insert = new THREE.Mesh(new THREE.CylinderGeometry(1.6 * MM, 1.6 * MM, 2.2 * MM, 12), mats.brass);
+    insert.rotation.x = Math.PI / 2;
+    insert.position.set(0, sy * MM, -1.9 * MM);
+    g.add(insert);
+
     const screw = createM2PanScrew(mats, 5.2);
     screw.position.set(0, sy * MM, 0.85 * MM);
     g.add(screw);
   }
 
-  // 8-Pin Header Row along -X edge
   for (let i = 0; i < 4; ++i) {
     const pin = new THREE.Mesh(GEO_PIN_GOLD, mats.gold);
     pin.position.set(-6.4 * MM, (-3.81 + i * 2.54) * MM, 2.4 * MM);
@@ -709,22 +878,19 @@ export function createMPU6050CoMAssembly(mats) {
 }
 
 /**
- * Dual-Rail Isolated Power System (Mini560 5.6V 5A Servo Buck + Mini-360 5.0V 2A Logic Buck
- * + 1000uF 10V Low-ESR Electrolytic Bulk Cap + 1N5819 Reverse-Blocking Schottky + VBAT Divider).
+ * Dual-Rail Isolated Power System with Copper-Poured PCBs, "4R7" Laser-Marked Inductors,
+ * Printed 1000uF 10V Low-ESR Sleeve, 1N5819 Schottky, and VBAT Divider.
  */
 export function createDualBuckPowerNodes(mats) {
-  // 1. Mini560 5.6V 5A Synchronous Buck Converter (30.0 x 18.0 mm, vertical along -Y side louvers)
   const buck5A = new THREE.Group();
-  const pcb5A = new THREE.Mesh(new THREE.BoxGeometry(18.0 * MM, 2.0 * MM, 30.0 * MM), mats.pcbGreen);
+  const pcb5A = new THREE.Mesh(new THREE.BoxGeometry(18.0 * MM, 2.0 * MM, 30.0 * MM), mats.pcbBuck);
   buck5A.add(pcb5A);
 
-  // Shielded 6.8x6.8x4.0mm Molded Alloy Power Inductor ("4R7")
-  const ind5A = new THREE.Mesh(new THREE.BoxGeometry(7.0 * MM, 4.2 * MM, 7.0 * MM), mats.ferrite);
+  const ind5A = new THREE.Mesh(new THREE.BoxGeometry(7.0 * MM, 4.2 * MM, 7.0 * MM), mats.ferrite4R7);
   ind5A.position.set(0.5 * MM, 2.8 * MM, -2.0 * MM);
   buck5A.add(ind5A);
 
-  // Synchronous Buck QFN IC + 6x 1206 MLCC Input/Output Ceramic Caps + Trim Pot
-  const ic5A = new THREE.Mesh(new THREE.BoxGeometry(4.0 * MM, 1.1 * MM, 4.0 * MM), mats.icEpoxy);
+  const ic5A = new THREE.Mesh(new THREE.BoxGeometry(4.0 * MM, 1.1 * MM, 4.0 * MM), mats.icLaser);
   ic5A.position.set(-3.5 * MM, 1.5 * MM, 6.5 * MM);
   buck5A.add(ic5A);
 
@@ -737,36 +903,47 @@ export function createDualBuckPowerNodes(mats) {
   pot5A.position.set(-4.8 * MM, 1.6 * MM, -8.5 * MM);
   buck5A.add(pot5A);
 
-  // 2. 1000 uF 10V Low-ESR Radial Electrolytic Bulk Capacitor (Ø8.0 x 12.0 mm)
+  // 1000 uF 10V Low-ESR Capacitor with Printed Sleeve + K-Scored Vent Cap + Rubber Bung
   const cap1000 = new THREE.Group();
-  const capCan = new THREE.Mesh(new THREE.CylinderGeometry(4.2 * MM, 4.2 * MM, 12.0 * MM, 24), mats.capSleeve);
+  const capCan = new THREE.Mesh(new THREE.CylinderGeometry(4.2 * MM, 4.2 * MM, 12.0 * MM, 28), mats.capSleeve);
   capCan.rotation.x = Math.PI / 2;
   cap1000.add(capCan);
-  const capVent = new THREE.Mesh(new THREE.CylinderGeometry(3.9 * MM, 3.9 * MM, 0.35 * MM, 24), mats.aluminum);
+
+  const capVent = new THREE.Mesh(new THREE.CylinderGeometry(3.95 * MM, 3.95 * MM, 0.35 * MM, 24), mats.aluminum);
   capVent.rotation.x = Math.PI / 2;
   capVent.position.z = 6.05 * MM;
   cap1000.add(capVent);
-  const capStripe = new THREE.Mesh(new THREE.BoxGeometry(1.4 * MM, 8.5 * MM, 11.8 * MM), mats.aluminum);
-  capStripe.position.x = -0.1 * MM;
-  capStripe.scale.set(0.18, 0.99, 0.98);
-  cap1000.add(capStripe);
+
+  // K-score safety vent lines on capacitor top
+  for (const ang of [0, Math.PI * 0.5]) {
+    const score = new THREE.Mesh(new THREE.BoxGeometry(6.8 * MM, 0.25 * MM, 0.18 * MM), mats.darkSteel);
+    score.rotation.z = ang;
+    score.position.z = 6.22 * MM;
+    cap1000.add(score);
+  }
+
+  const bung = new THREE.Mesh(new THREE.CylinderGeometry(3.9 * MM, 3.9 * MM, 0.8 * MM, 20), mats.soleSilicone);
+  bung.rotation.x = Math.PI / 2;
+  bung.position.z = -5.8 * MM;
+  cap1000.add(bung);
+
   for (const dx of [-1.75, 1.75]) {
-    const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.35 * MM, 0.35 * MM, 4.5 * MM, 8), mats.stainless);
+    const lead = new THREE.Mesh(new THREE.CylinderGeometry(0.35 * MM, 0.35 * MM, 5.2 * MM, 8), mats.stainless);
     lead.rotation.x = Math.PI / 2;
-    lead.position.set(dx * MM, 0, -7.8 * MM);
+    lead.position.set(dx * MM, 0, -8.2 * MM);
     cap1000.add(lead);
   }
 
-  // 3. Mini-360 5.0V 2A Isolated Logic Buck + 1N5819 Schottky Diode + 200k/100k VBAT Divider (+Y side)
+  // Mini-360 5.0V 2A Logic Buck + 1N5819 Schottky + VBAT Divider
   const buck2A = new THREE.Group();
-  const pcb2A = new THREE.Mesh(new THREE.BoxGeometry(11.2 * MM, 1.8 * MM, 17.5 * MM), mats.pcbGreen);
+  const pcb2A = new THREE.Mesh(new THREE.BoxGeometry(11.2 * MM, 1.8 * MM, 17.5 * MM), mats.pcbBuck);
   buck2A.add(pcb2A);
 
-  const ind2A = new THREE.Mesh(new THREE.BoxGeometry(4.4 * MM, 3.0 * MM, 4.4 * MM), mats.ferrite);
+  const ind2A = new THREE.Mesh(new THREE.BoxGeometry(4.4 * MM, 3.0 * MM, 4.4 * MM), mats.ferrite4R7);
   ind2A.position.set(0, -2.2 * MM, -2.5 * MM);
   buck2A.add(ind2A);
 
-  const ic2A = new THREE.Mesh(new THREE.BoxGeometry(4.9 * MM, 1.4 * MM, 3.9 * MM), mats.icEpoxy);
+  const ic2A = new THREE.Mesh(new THREE.BoxGeometry(4.9 * MM, 1.4 * MM, 3.9 * MM), mats.icLaser);
   ic2A.position.set(0.5 * MM, -1.5 * MM, 4.0 * MM);
   buck2A.add(ic2A);
 
@@ -774,17 +951,19 @@ export function createDualBuckPowerNodes(mats) {
   pot2A.position.set(-2.5 * MM, -1.5 * MM, -5.8 * MM);
   buck2A.add(pot2A);
 
-  // 1N5819 Schottky Barrier Diode (DO-41 axial package w/ silver cathode band -> prevents USB backfeed!)
   const schottkyBody = new THREE.Mesh(new THREE.CylinderGeometry(1.35 * MM, 1.35 * MM, 4.8 * MM, 16), mats.icEpoxy);
   schottkyBody.position.set(0, -2.6 * MM, 11.8 * MM);
   schottkyBody.rotation.x = Math.PI / 2;
   buck2A.add(schottkyBody);
-  const cathodeBand = new THREE.Mesh(new THREE.CylinderGeometry(1.40 * MM, 1.40 * MM, 0.9 * MM, 16), mats.aluminum);
+  const cathodeBand = new THREE.Mesh(new THREE.CylinderGeometry(1.40 * MM, 1.40 * MM, 0.95 * MM, 16), mats.aluminum);
   cathodeBand.rotation.x = Math.PI / 2;
   cathodeBand.position.set(0, -2.6 * MM, 13.3 * MM);
   buck2A.add(cathodeBand);
+  const axialLead = new THREE.Mesh(new THREE.CylinderGeometry(0.38 * MM, 0.38 * MM, 8.8 * MM, 8), mats.stainless);
+  axialLead.rotation.x = Math.PI / 2;
+  axialLead.position.set(0, -2.6 * MM, 11.8 * MM);
+  buck2A.add(axialLead);
 
-  // 200kOhm / 100kOhm Precision VBAT_ADC Divider Resistors
   for (const dz of [9.5, 11.2]) {
     const rDiv = new THREE.Mesh(GEO_SMD_0603, mats.icEpoxy);
     rDiv.position.set(3.6 * MM, -1.4 * MM, dz * MM);
@@ -795,17 +974,22 @@ export function createDualBuckPowerNodes(mats) {
 }
 
 /**
- * MAX98357A I2S 3W Class-D Amplifier + 28 mm 4ohm 3W Cavity Neodymium Speaker (11.5 g).
+ * MAX98357A I2S 3W Class-D Amp + 28 mm 4ohm 3W Speaker WITH INTERNAL COPPER VOICE COIL & NOMEX SPIDER!
  */
 export function createAudioSystemNodes(mats) {
-  // 1. MAX98357A I2S Breakout PCB (19.0 x 17.8 x 1.6 mm)
   const ampGroup = new THREE.Group();
   const pcb = new THREE.Mesh(new THREE.BoxGeometry(17.8 * MM, 1.6 * MM, 19.0 * MM), mats.pcbPurple);
   ampGroup.add(pcb);
 
-  const qfn = new THREE.Mesh(new THREE.BoxGeometry(3.2 * MM, 1.0 * MM, 3.2 * MM), mats.icEpoxy);
+  const qfn = new THREE.Mesh(new THREE.BoxGeometry(3.2 * MM, 1.0 * MM, 3.2 * MM), mats.icLaser);
   qfn.position.set(0, -1.2 * MM, 0);
   ampGroup.add(qfn);
+
+  for (const dx of [-3.5, 3.5]) {
+    const fb = new THREE.Mesh(GEO_SMD_1206, mats.ferrite4R7);
+    fb.position.set(dx * MM, -1.3 * MM, -2.8 * MM);
+    ampGroup.add(fb);
+  }
 
   const spkTerm = new THREE.Mesh(new THREE.BoxGeometry(6.5 * MM, 6.2 * MM, 5.2 * MM), mats.termGreen);
   spkTerm.position.set(3.5 * MM, -3.6 * MM, -6.2 * MM);
@@ -817,23 +1001,20 @@ export function createAudioSystemNodes(mats) {
     ampGroup.add(pin);
   }
 
-  // 2. 28 mm 4ohm 3W Neodymium Speaker seated inside torso_chassis front acoustic ring!
+  // 28 mm Neodymium Speaker with Internal Voice Coil, Kapton Bobbin, Nomex Spider & T-Yoke!
   const spkGroup = new THREE.Group();
-  // Outer stamped basket rim (Ø28.0 mm)
   const rim = new THREE.Mesh(new THREE.CylinderGeometry(14.0 * MM, 12.8 * MM, 2.2 * MM, 32), mats.anodizedBlack);
   rim.rotation.z = Math.PI / 2;
   rim.position.x = 1.2 * MM;
   spkGroup.add(rim);
 
-  // Corrugated Half-Roll Rubber Surround (Torus at +X front face)
   const surround = new THREE.Mesh(new THREE.TorusGeometry(11.4 * MM, 1.35 * MM, 12, 32), mats.soleSilicone);
   surround.rotation.y = Math.PI / 2;
   surround.position.x = 2.0 * MM;
   spkGroup.add(surround);
 
-  // Concave Acoustic Diaphragm Cone + Central Voice-Coil Dust Cap
   const cone = new THREE.Mesh(new THREE.ConeGeometry(10.6 * MM, 3.4 * MM, 32, 1, true), mats.speakerCone);
-  cone.rotation.z = Math.PI / 2; // Apex at -X, open mouth at +X
+  cone.rotation.z = Math.PI / 2;
   cone.position.x = 0.5 * MM;
   spkGroup.add(cone);
 
@@ -845,8 +1026,18 @@ export function createAudioSystemNodes(mats) {
   dustCap.position.x = -0.2 * MM;
   spkGroup.add(dustCap);
 
-  // Rear Basket Spider Struts + Shielded Neodymium Pot Magnet + Gold Solder Lugs
-  const basket = new THREE.Mesh(new THREE.CylinderGeometry(11.5 * MM, 8.2 * MM, 2.8 * MM, 24), mats.darkSteel);
+  // Internal Corrugated Nomex Spider Suspension Ring + Wound Copper Voice Coil!
+  const spider = new THREE.Mesh(new THREE.CylinderGeometry(8.8 * MM, 8.8 * MM, 0.35 * MM, 24), mats.nomexSpider);
+  spider.rotation.z = Math.PI / 2;
+  spider.position.x = -1.3 * MM;
+  spkGroup.add(spider);
+
+  const voiceCoil = new THREE.Mesh(new THREE.CylinderGeometry(4.3 * MM, 4.3 * MM, 3.6 * MM, 24), mats.copper);
+  voiceCoil.rotation.z = Math.PI / 2;
+  voiceCoil.position.x = -2.2 * MM;
+  spkGroup.add(voiceCoil);
+
+  const basket = new THREE.Mesh(new THREE.CylinderGeometry(11.5 * MM, 8.2 * MM, 2.6 * MM, 24, 1, true), mats.darkSteel);
   basket.rotation.z = Math.PI / 2;
   basket.position.x = -1.2 * MM;
   spkGroup.add(basket);
@@ -866,15 +1057,12 @@ export function createAudioSystemNodes(mats) {
 }
 
 /**
- * 2S 14500 800mAh 10C Li-ion Pack + 2S 5A BMS + USB-C Boost Charger + 6A Main Slide Switch (51.0 g).
- * Exact alignment with torso_back_cover.scad cutouts:
- *   - USB-C 2S Charging Port at (X = -24.5 mm, Y = -14.0 mm, Z = +14.5 mm)
- *   - 6A Main Slide Switch at (X = -24.5 mm, Y = +14.0 mm, Z = +14.5 mm)
+ * 2S 14500 800mAh 10C Li-ion Pack with Printed Cell Wraps, Helical Nickel Springs,
+ * Silkscreened 2S 5A BMS, XH2.54 Balance Sense Wires, USB-C Charger & 6A Slide Switch!
  */
 export function createBattery2SAndRearIO(mats) {
   const packGroup = new THREE.Group();
 
-  // Contoured Dual-14500 ABS Holder Cradle
   const cradle = new THREE.Mesh(new THREE.BoxGeometry(8.0 * MM, 31.5 * MM, 52.4 * MM), mats.anodizedBlack);
   cradle.position.set(3.2 * MM, 0, 0);
   packGroup.add(cradle);
@@ -884,12 +1072,12 @@ export function createBattery2SAndRearIO(mats) {
     const cellGrp = new THREE.Group();
     cellGrp.position.set(0, sy * MM, 0);
 
-    const wrap = new THREE.Mesh(new THREE.CylinderGeometry(7.0 * MM, 7.0 * MM, 49.2 * MM, 28), mats.liIonBlue);
+    const wrap = new THREE.Mesh(new THREE.CylinderGeometry(7.0 * MM, 7.0 * MM, 49.0 * MM, 32), mats.liIonBlue);
     wrap.rotation.x = Math.PI / 2;
+    wrap.rotation.y = Math.PI * 0.5;
     wrap.castShadow = true;
     cellGrp.add(wrap);
 
-    // White insulating gasket + copper/nickel button-top positive terminal (alternating series polarity!)
     const polDir = sy < 0 ? 1 : -1;
     const gasket = new THREE.Mesh(new THREE.CylinderGeometry(6.6 * MM, 6.6 * MM, 0.6 * MM, 20), mats.nylonWhite);
     gasket.rotation.x = Math.PI / 2;
@@ -901,37 +1089,40 @@ export function createBattery2SAndRearIO(mats) {
     posCap.position.z = polDir * 25.4 * MM;
     cellGrp.add(posCap);
 
-    const negBase = new THREE.Mesh(new THREE.CylinderGeometry(6.4 * MM, 6.4 * MM, 0.5 * MM, 20), mats.stainless);
-    negBase.rotation.x = Math.PI / 2;
-    negBase.position.z = -polDir * 24.8 * MM;
-    cellGrp.add(negBase);
+    // Conical Helical Nickel Negative Contact Spring inside Cradle!
+    for (let s = 0; s < 3; ++s) {
+      const coil = new THREE.Mesh(new THREE.TorusGeometry((3.8 - s * 0.7) * MM, 0.32 * MM, 6, 16), mats.stainless);
+      coil.position.set(0, sy * MM, -polDir * (25.2 + s * 0.45) * MM);
+      packGroup.add(coil);
+    }
 
     packGroup.add(cellGrp);
     cells.push(cellGrp);
   }
 
-  // Spot-Welded 0.15mm Pure Nickel Series Busbar Strip (BM link at top Z = +25.9 mm)
-  const nickelSeries = new THREE.Mesh(new THREE.BoxGeometry(4.5 * MM, 21.0 * MM, 0.4 * MM), mats.stainless);
+  // Spot-Welded Pure Nickel Series Busbar Strip + 4 weld dimples
+  const nickelSeries = new THREE.Mesh(new THREE.BoxGeometry(4.8 * MM, 21.2 * MM, 0.45 * MM), mats.stainless);
   nickelSeries.position.set(0, 0, 25.9 * MM);
   packGroup.add(nickelSeries);
 
-  // 2S 5A BMS Protection PCB (28.0 x 10.0 x 2.0 mm) with 4x 8205A Dual MOSFETs + R010 Shunt
+  // Silkscreened 2S 5A BMS PCB + 4x 8205A Dual MOSFETs + R010 Current-Sense Shunt
   const bmsGroup = new THREE.Group();
   bmsGroup.position.set(-8.2 * MM, 0, 2.0 * MM);
-  const bmsPcb = new THREE.Mesh(new THREE.BoxGeometry(1.8 * MM, 28.0 * MM, 10.5 * MM), mats.pcbGreen);
+  const bmsPcb = new THREE.Mesh(new THREE.BoxGeometry(1.8 * MM, 28.0 * MM, 10.5 * MM), mats.pcbBMS);
   bmsGroup.add(bmsPcb);
   for (const dy of [-9.0, -3.5, 2.0, 7.5]) {
-    const mosfet = new THREE.Mesh(new THREE.BoxGeometry(1.1 * MM, 3.2 * MM, 4.4 * MM), mats.icEpoxy);
+    const mosfet = new THREE.Mesh(new THREE.BoxGeometry(1.1 * MM, 3.2 * MM, 4.4 * MM), mats.icLaser);
     mosfet.position.set(-1.3 * MM, dy * MM, 0);
     bmsGroup.add(mosfet);
   }
+  const shunt = new THREE.Mesh(GEO_SMD_1206, mats.icEpoxy);
+  shunt.position.set(-1.2 * MM, 11.2 * MM, -2.0 * MM);
+  bmsGroup.add(shunt);
   packGroup.add(bmsGroup);
 
-  // Rear Service Panel IO Group (USB-C 2S Boost Charger & 6A Main Slide Switch aligned with cover cutouts!)
+  // Rear Service Panel IO (USB-C 2S Boost Charger & 6A Main Slide Switch)
   const rearIOGroup = new THREE.Group();
-
-  // USB-C 2S Boost Charger at (X = -22.0, Y = -14.0, Z = +14.5 mm in torso frame)
-  const usbcPcb = new THREE.Mesh(new THREE.BoxGeometry(6.5 * MM, 11.0 * MM, 2.0 * MM), mats.pcbBlack);
+  const usbcPcb = new THREE.Mesh(new THREE.BoxGeometry(6.5 * MM, 11.0 * MM, 2.0 * MM), mats.pcbXIAO);
   usbcPcb.position.set(-19.8 * MM, -14.0 * MM, 12.6 * MM);
   rearIOGroup.add(usbcPcb);
   const usbcPort = new THREE.Mesh(new THREE.BoxGeometry(7.2 * MM, 8.94 * MM, 3.2 * MM), mats.stainless);
@@ -941,7 +1132,6 @@ export function createBattery2SAndRearIO(mats) {
   usbcCav.position.set(-25.4 * MM, -14.0 * MM, 14.5 * MM);
   rearIOGroup.add(usbcCav);
 
-  // 6A Panel-Mount Main Slide Switch at (X = -22.0, Y = +14.0, Z = +14.5 mm in torso frame)
   const swBody = new THREE.Mesh(new THREE.BoxGeometry(5.5 * MM, 11.2 * MM, 5.0 * MM), mats.stainless);
   swBody.position.set(-21.2 * MM, 14.0 * MM, 14.5 * MM);
   rearIOGroup.add(swBody);
@@ -949,7 +1139,7 @@ export function createBattery2SAndRearIO(mats) {
   swKnob.position.set(-25.0 * MM, 15.6 * MM, 14.5 * MM);
   rearIOGroup.add(swKnob);
   for (const dy of [-3.5, 0, 3.5]) {
-    const lug = new THREE.Mesh(new THREE.BoxGeometry(3.2 * MM, 0.8 * MM, 1.4 * MM), mats.silver || mats.stainless);
+    const lug = new THREE.Mesh(new THREE.BoxGeometry(3.2 * MM, 0.8 * MM, 1.4 * MM), mats.stainless);
     lug.position.set(-17.2 * MM, (14.0 + dy) * MM, 14.5 * MM);
     rearIOGroup.add(lug);
   }
@@ -958,8 +1148,24 @@ export function createBattery2SAndRearIO(mats) {
 }
 
 /**
- * Helper to create a smooth 3D Catmull-Rom silicone wire tube from mm waypoints.
+ * Molded 2.0 mm High-Friction Silicone Sole Pad (mu >= 0.90) with Directional Chevron Tread Ribs!
  */
+export function createSiliconeTreadPad(mats) {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(43.6 * MM, 39.6 * MM, 1.5 * MM), mats.soleSilicone);
+  base.position.z = 0.25 * MM;
+  base.receiveShadow = true;
+  g.add(base);
+
+  // 7 directional anti-slip tread ribs along bottom contact face
+  for (let ix = -3; ix <= 3; ++ix) {
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(3.4 * MM, 36.5 * MM, 0.65 * MM), mats.soleSilicone);
+    rib.position.set(ix * 6.0 * MM, 0, -0.68 * MM);
+    g.add(rib);
+  }
+  return g;
+}
+
 export function createWireTube(ptsMM, radiusMM, mat, tubularSegments = 28) {
   const vecs = ptsMM.map((p) => new THREE.Vector3(p[0] * MM, p[1] * MM, p[2] * MM));
   const curve = new THREE.CatmullRomCurve3(vecs);
@@ -968,29 +1174,28 @@ export function createWireTube(ptsMM, radiusMM, mat, tubularSegments = 28) {
 }
 
 /**
- * Build Complete Real-Hardware 3D Silicone Wiring Harness:
- *   - Torso Power & Data Buses (VBAT 7.4V, 5.6V Servo, 5.0V Logic via 1N5819, 400kHz I2C, I2S + Speaker)
- *   - Head Coaxial I2C + Power Flex Harness (XIAO <-> VL53L0X & Neck Umbilical)
- *   - Left & Right Leg Servo Harnesses routed directly through leg_link.scad's X = -6.8mm rear conduit!
+ * Complete 12-Channel + Dual-Buck + 2S Balance + VBAT_ADC + OE# + I2C + I2S Wiring Harness!
  */
 export function createCompleteWiringHarnesses(mats) {
   const torsoHarness = new THREE.Group();
 
-  // 1. VBAT 7.4V 22AWG Red & Black: 2S BMS (-18,0,33) -> 6A Switch (-17,14,14.5) -> Mini560 (11,-21,25) & Mini-360 (11,21,23)
+  // 1. VBAT 7.4V 22AWG + 2S Balance Sense (BM 3.7V)
   torsoHarness.add(createWireTube([
     [-18.0, 2.0, 32.0], [-17.5, 11.0, 21.0], [-17.0, 14.0, 14.5],
     [-8.0, 16.5, 16.0], [6.0, 20.0, 20.0], [11.0, 21.0, 23.0]
   ], 0.85, mats.wireVbatRed));
-
   torsoHarness.add(createWireTube([
     [-17.0, 14.0, 14.5], [-9.0, 2.0, 15.5], [4.0, -14.0, 18.0], [11.0, -21.0, 22.0]
   ], 0.90, mats.wireVbatRed));
-
   torsoHarness.add(createWireTube([
     [-18.0, -2.0, 30.0], [-11.0, -10.0, 20.0], [4.0, -18.0, 21.0], [11.0, -21.0, 25.0]
   ], 0.85, mats.wireGndBlack));
+  // 2S Center-Tap BM 3.7V Balance Wire from Top Nickel Strip -> BMS BM Pad
+  torsoHarness.add(createWireTube([
+    [-10.5, 0.0, 57.8], [-16.8, 0.0, 52.0], [-18.5, 0.0, 35.0]
+  ], 0.52, mats.wirePwmSig, 18));
 
-  // 2. 5.6V 5A Servo High-Current Rail: Mini560 (11,-21,28) -> 1000uF Bulk Cap (14,-14,17) -> PCA9685 V+ Screw Terminal (5,0,41)
+  // 2. 5.6V 5A Servo High-Current Rail -> 1000uF Cap -> PCA9685 V+ Screw Terminal
   torsoHarness.add(createWireTube([
     [11.0, -20.0, 28.0], [13.8, -14.5, 19.5], [10.5, -8.0, 32.0], [5.8, -2.5, 41.5]
   ], 0.95, mats.wireServo5v6));
@@ -998,12 +1203,15 @@ export function createCompleteWiringHarnesses(mats) {
     [11.0, -20.0, 26.0], [13.2, -13.0, 18.5], [9.5, -5.0, 32.0], [5.8, 2.5, 41.5]
   ], 0.90, mats.wireGndBlack));
 
-  // 3. 5.0V Isolated Logic Rail: Mini-360 + 1N5819 (11,21,34) -> MAX98357A VIN (12,20,45) & Neck Umbilical (0,0,60)
+  // 3. 5.0V Isolated Logic + VBAT_ADC (GPIO7) + OE# (GPIO8) Control Leads
   torsoHarness.add(createWireTube([
     [11.0, 20.0, 34.5], [12.0, 20.0, 42.0], [7.5, 11.0, 52.0], [-2.0, 2.0, 61.0]
   ], 0.72, mats.wireLogic5v0));
+  torsoHarness.add(createWireTube([
+    [13.0, 19.5, 32.5], [6.5, 25.0, 38.0], [3.0, 29.5, 36.5], [-1.8, 1.0, 61.0]
+  ], 0.50, mats.wireSenseTeal, 22));
 
-  // 4. 400 kHz I2C Bus (SDA=Blue, SCL=Amber): Neck Umbilical (-2,-2,61) -> PCA9685 I2C (3,30,33) -> Pelvis CoM MPU-6050 (-4,0,15)
+  // 4. 400 kHz I2C Bus (SDA=Blue, SCL=Amber)
   torsoHarness.add(createWireTube([
     [-2.5, -1.5, 61.0], [2.0, 18.0, 48.0], [3.0, 29.5, 34.0], [3.5, 14.0, 19.0], [-4.2, -1.2, 15.5]
   ], 0.62, mats.wireI2cSda));
@@ -1011,7 +1219,7 @@ export function createCompleteWiringHarnesses(mats) {
     [-2.5, -2.8, 61.0], [1.2, 17.0, 47.2], [3.0, 29.5, 31.5], [2.8, 13.0, 18.2], [-4.2, 1.2, 15.5]
   ], 0.62, mats.wireI2cScl));
 
-  // 5. I2S Digital Audio Bus + Twisted Red/Black Speaker Leads -> 28mm Chest Speaker
+  // 5. I2S Audio + Speaker Twisted Leads
   torsoHarness.add(createWireTube([
     [-1.5, 3.0, 60.5], [6.5, 14.0, 51.0], [11.5, 19.0, 44.5]
   ], 0.68, mats.wireI2sAudio));
@@ -1022,7 +1230,19 @@ export function createCompleteWiringHarnesses(mats) {
     [14.5, 16.5, 33.2], [17.0, 8.5, 28.0], [17.8, -5.5, 26.0]
   ], 0.62, mats.wireGndBlack));
 
-  // 6. Head Internal I2C + 3.3V Flex Ribbon (XIAO ESP32S3 <-> Coaxial VL53L0X)
+  // 6. Individual Shoulder (CH8/CH9) & Pelvis Hip (CH0..CH7) Servo Ribbon Bundles from PCA9685!
+  for (const side of [-1, 1]) {
+    // Shoulder servo lead
+    torsoHarness.add(createWireTube([
+      [7.2, side * 12.0, 27.0], [6.5, side * 24.0, 36.0], [-8.0, side * 28.0, 44.0]
+    ], 0.56, mats.wirePwmSig, 18));
+    // Pelvis Hip Roll & Hip Pitch trunk down into hip clevis
+    torsoHarness.add(createWireTube([
+      [7.2, side * 19.0, 26.0], [6.0, side * 22.0, 14.0], [-5.5, side * 23.0, 2.0]
+    ], 0.64, mats.wireServo5v6, 18));
+  }
+
+  // 7. Head Internal Coaxial Harness
   const headHarness = new THREE.Group();
   headHarness.add(createWireTube([
     [8.0, -7.5, 12.0], [10.5, -6.0, 8.5], [15.5, -3.5, 7.8]
@@ -1034,15 +1254,18 @@ export function createCompleteWiringHarnesses(mats) {
     [8.0, 7.5, 12.0], [4.0, 3.5, 4.0], [-1.5, 0.0, -2.0]
   ], 0.68, mats.wireLogic5v0, 16));
 
-  // 7. Left & Right Leg Internal Conduit Servo Cables (routed inside leg_link.scad's X=-6.8mm rear bore!)
+  // 8. Left & Right Leg Internal Conduit Harnesses (inside leg_link.scad's X=-6.8mm rear bore!)
   function makeLegHarness() {
     const lg = new THREE.Group();
     lg.add(createWireTube([
-      [-3.5, 0.0, -4.0], [-6.8, -0.9, -20.0], [-6.8, -0.9, -58.0], [-5.5, -0.8, -79.0]
-    ], 0.68, mats.wireServo5v6, 20));
+      [-3.5, 0.0, -4.0], [-6.8, -1.1, -20.0], [-6.8, -1.1, -58.0], [-5.5, -0.9, -79.0]
+    ], 0.65, mats.wireServo5v6, 20));
     lg.add(createWireTube([
-      [-3.5, 1.2, -4.0], [-6.8, 0.9, -20.0], [-6.8, 0.9, -58.0], [-5.5, 0.8, -83.0]
-    ], 0.62, mats.wirePwmSig, 20));
+      [-3.5, 1.1, -4.0], [-6.8, 0.0, -20.0], [-6.8, 0.0, -58.0], [-5.2, 0.2, -85.0]
+    ], 0.60, mats.wirePwmSig, 20));
+    lg.add(createWireTube([
+      [-3.5, -1.1, -4.0], [-6.8, 1.1, -20.0], [-6.8, 1.1, -58.0], [-5.5, 0.9, -81.0]
+    ], 0.60, mats.wireGndBlack, 20));
     return lg;
   }
 
@@ -1056,16 +1279,14 @@ export function createCompleteWiringHarnesses(mats) {
 
 /**
  * Kinematic 12-DOF Joint Axis Vectors + MuJoCo-Verified Whole-Body Center of Mass (CoM) Target.
- *   - Red = Roll (+X), Green = Pitch (+Y), Blue = Yaw (+Z)
- *   - Golden CoM Sphere at Global [0.99, 0.0, 111.55] mm + Plumb Line onto Support Polygon!
  */
 export function attachKinematicAndCoMGuides({
   torsoGroup, headYawJoint, headPitchJoint, lShoulderJoint, rShoulderJoint, leftLeg, rightLeg
 }) {
   const markers = [];
-  const matAxisX = new THREE.LineBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.78 });
-  const matAxisY = new THREE.LineBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.78 });
-  const matAxisZ = new THREE.LineBasicMaterial({ color: 0x2563eb, transparent: true, opacity: 0.78 });
+  const matAxisX = new THREE.LineBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.80 });
+  const matAxisY = new THREE.LineBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.80 });
+  const matAxisZ = new THREE.LineBasicMaterial({ color: 0x2563eb, transparent: true, opacity: 0.80 });
   const matCoM   = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.20, metalness: 0.85, emissive: 0xb45309, emissiveIntensity: 0.25 });
 
   function addAxisLine(parent, p1, p2, mat) {
@@ -1079,7 +1300,6 @@ export function attachKinematicAndCoMGuides({
     markers.push(line);
   }
 
-  // 12 Joint Rotational Axes
   addAxisLine(headYawJoint,   [0, 0, -10], [0, 0, 26], matAxisZ);
   addAxisLine(headPitchJoint, [0, -24, 0], [0, 24, 0], matAxisY);
   addAxisLine(lShoulderJoint, [0, -14, 0], [0, 14, 0], matAxisY);
@@ -1091,38 +1311,31 @@ export function attachKinematicAndCoMGuides({
     addAxisLine(leg.ankleRoll,  [-22, 0, 0], [22, 0, 0], matAxisX);
   }
 
-  // Whole-Robot CoM Indicator in torsoGroup (Global Z = 111.55 mm => Torso local Z = 111.55 - 124.0 = -12.45 mm, X = +0.99 mm)
   const comGroup = new THREE.Group();
   comGroup.position.set(0.99 * MM, 0, -12.45 * MM);
   comGroup.visible = false;
 
-  const comSphere = new THREE.Mesh(new THREE.SphereGeometry(3.4 * MM, 20, 20), matCoM);
-  comGroup.add(comSphere);
+  comGroup.add(new THREE.Mesh(new THREE.SphereGeometry(3.4 * MM, 20, 20), matCoM));
+  comGroup.add(new THREE.Mesh(new THREE.TorusGeometry(6.0 * MM, 0.45 * MM, 10, 32), matCoM));
 
-  const comRing = new THREE.Mesh(new THREE.TorusGeometry(6.0 * MM, 0.45 * MM, 10, 32), matCoM);
-  comGroup.add(comRing);
-
-  // Plumb line down to Z=0 support polygon + support polygon outline!
   const plumbGeo = new THREE.BufferGeometry().setFromPoints([
     new THREE.Vector3(0, 0, 0),
     new THREE.Vector3(0, 0, -111.55 * MM),
   ]);
   const plumbLine = new THREE.Line(plumbGeo, new THREE.LineDashedMaterial({
-    color: 0xd97706, dashSize: 0.005, gapSize: 0.003, transparent: true, opacity: 0.75
+    color: 0xd97706, dashSize: 0.005, gapSize: 0.003, transparent: true, opacity: 0.78
   }));
   plumbLine.computeLineDistances();
   comGroup.add(plumbLine);
 
-  // Central flat-sole support polygon outline on floor (-25..+32mm X, -49..+49mm Y)
   const polyPts = [
     [-25.99, -49, -111.55], [31.01, -49, -111.55],
     [31.01,   49, -111.55], [-25.99, 49, -111.55], [-25.99, -49, -111.55],
   ].map((p) => new THREE.Vector3(p[0] * MM, p[1] * MM, p[2] * MM));
-  const polyLine = new THREE.Line(
+  comGroup.add(new THREE.Line(
     new THREE.BufferGeometry().setFromPoints(polyPts),
-    new THREE.LineBasicMaterial({ color: 0xd97706, transparent: true, opacity: 0.55 })
-  );
-  comGroup.add(polyLine);
+    new THREE.LineBasicMaterial({ color: 0xd97706, transparent: true, opacity: 0.58 })
+  ));
 
   torsoGroup.add(comGroup);
   markers.push(comGroup);

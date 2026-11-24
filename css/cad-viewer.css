@@ -155,8 +155,9 @@ html, body {
   color: #ffffff;
 }
 
-/* Explode Assembly Slider Rail (Left-Bottom on PC, Left-Center Vertical on Mobile Landscape) */
-.cad-explode-rail {
+/* Explode & Section-Plane Scrubber Rails */
+.cad-explode-rail,
+.cad-section-rail {
   position: fixed;
   left: max(20px, env(safe-area-inset-left));
   bottom: max(24px, env(safe-area-inset-bottom));
@@ -171,6 +172,14 @@ html, body {
   border: 1px solid rgba(17, 20, 24, 0.09);
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.06);
   z-index: 20;
+}
+
+.cad-section-rail {
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + 60px);
+}
+
+.cad-section-rail[hidden] {
+  display: none !important;
 }
 
 .cad-slider {
@@ -246,11 +255,16 @@ html, body {
     height: 16px;
   }
 
-  .cad-explode-rail {
+  .cad-explode-rail,
+  .cad-section-rail {
     left: max(10px, env(safe-area-inset-left));
     bottom: max(10px, env(safe-area-inset-bottom));
     padding: 5px 10px 5px 5px;
     gap: 8px;
+  }
+
+  .cad-section-rail {
+    bottom: calc(max(10px, env(safe-area-inset-bottom)) + 52px);
   }
 
   .cad-slider {
@@ -268,6 +282,11 @@ html, body {
     left: 50%;
     transform: translateX(-50%);
     bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px);
+  }
+  .cad-section-rail {
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 118px);
   }
   .cad-dock {
     bottom: max(14px, env(safe-area-inset-bottom));
