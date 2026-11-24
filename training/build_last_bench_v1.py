@@ -1246,45 +1246,48 @@ def forward_rma_student(st_p: dict, hist_flat: jnp.ndarray) -> jnp.ndarray:
 _CRITIC_GEMM_DTYPE = jnp.bfloat16 if HAS_A100_BF16 else jnp.float32
 v_cpg_batch = jax.vmap(compute_cpg_prior_jax, in_axes=(0, 0, 0, 0, None, 0))
 
+def _mm_fp32(a: jnp.ndarray, b: jnp.ndarray) -> jnp.ndarray:
+    return jnp.matmul(a, b, precision=jax.lax.Precision.HIGHEST)
+
 def forward_actor_critic(params: dict, obs: jnp.ndarray, priv_obs: jnp.ndarray, env_vec: jnp.ndarray,
                          phi: jnp.ndarray, cmd: jnp.ndarray, head_phase: jnp.ndarray):
     W1, B1, W2, B2, W3, B3, cpg = assemble_equivariant_actor(params["actor"])
-    h1 = jnp.tanh(obs @ W1.T + B1)
-    h2 = jnp.tanh(h1  @ W2.T + B2)
-    mlp_delta = jnp.tanh(h2 @ W3.T + B3) * ACT_RES_SCALE
+    h1 = jnp.tanh(_mm_fp32(obs, W1.T) + B1)
+    h2 = jnp.tanh(_mm_fp32(h1,  W2.T) + B2)
+    mlp_delta = jnp.tanh(_mm_fp32(h2, W3.T) + B3) * ACT_RES_SCALE
 
     # RMA online environment adaptation latent modulation (zero during quiet standing -> 0.0mm stand drift!)
     z_env = encode_rma_teacher(params["rma_teacher"], env_vec)
     act_gate = jnp.clip(jnp.linalg.norm(cmd, axis=-1, keepdims=True) / 0.03, 0.0, 1.0)
-    rma_delta = jnp.tanh(z_env @ params["rma_teacher"]["head_w"].T) * (0.08 * act_gate)
+    rma_delta = jnp.tanh(_mm_fp32(z_env, params["rma_teacher"]["head_w"].T)) * (0.08 * act_gate)
 
     q_prior = v_cpg_batch(phi, cmd[..., 0], cmd[..., 1], cmd[..., 2], cpg, head_phase)
     mean_q = jnp.clip(q_prior + mlp_delta + rma_delta, Q_MIN, Q_MAX)
 
-    # A100 bfloat16 Tensor Core Deep Residual Critic (float32 LayerNorm & master weights)
+    # A100 bfloat16 Tensor Core Deep Residual Critic (float32 accumulation, LayerNorm & master weights)
     c = params["critic"]
     dt_g = _CRITIC_GEMM_DTYPE
-    z1 = jax.nn.silu(_layernorm((priv_obs.astype(dt_g) @ c["w1"].astype(dt_g).T).astype(jnp.float32) + c["b1"], c["g1"], c["bt1"]))
-    z2 = z1 + jax.nn.silu(_layernorm((z1.astype(dt_g) @ c["w2"].astype(dt_g).T).astype(jnp.float32) + c["b2"], c["g2"], c["bt2"]))
-    z3 = jax.nn.silu(_layernorm((z2.astype(dt_g) @ c["w3"].astype(dt_g).T).astype(jnp.float32) + c["b3"], c["g3"], c["bt3"]))
-    val = (z3 @ c["w4"].T + c["b4"]).squeeze(-1)
+    z1 = jax.nn.silu(_layernorm(jnp.matmul(priv_obs.astype(dt_g), c["w1"].astype(dt_g).T, preferred_element_type=jnp.float32) + c["b1"], c["g1"], c["bt1"]))
+    z2 = z1 + jax.nn.silu(_layernorm(jnp.matmul(z1.astype(dt_g), c["w2"].astype(dt_g).T, preferred_element_type=jnp.float32) + c["b2"], c["g2"], c["bt2"]))
+    z3 = jax.nn.silu(_layernorm(jnp.matmul(z2.astype(dt_g), c["w3"].astype(dt_g).T, preferred_element_type=jnp.float32) + c["b3"], c["g3"], c["bt3"]))
+    val = (_mm_fp32(z3, c["w4"].T) + c["b4"]).squeeze(-1)
     return mean_q, params["actor"]["log_std"], cpg, val
 
-# Verify structural symmetry & zero-stand-drift before training starts
+# Verify structural symmetry & zero-stand-drift in strict IEEE-754 FP32 before training starts
 _test_p = init_last_bench_params(jax.random.PRNGKey(SEED))
 _test_st = init_rma_student_params(jax.random.PRNGKey(SEED + 99))
 _W1, _B1, _W2, _B2, _W3, _B3, _ = assemble_equivariant_actor(_test_p["actor"])
-_rx = jax.random.normal(jax.random.PRNGKey(7), (16, OBS_DIM))
-_f_rx = jnp.tanh(jnp.tanh(jnp.tanh(_rx @ _W1.T + _B1) @ _W2.T + _B2) @ _W3.T + _B3)
-_rx_m = _rx @ M_OBS_JAX.T
-_f_rxm = jnp.tanh(jnp.tanh(jnp.tanh(_rx_m @ _W1.T + _B1) @ _W2.T + _B2) @ _W3.T + _B3)
-_sym_err = float(jnp.max(jnp.abs(_f_rx @ M_ACT_JAX.T - _f_rxm)))
+_rx = jax.random.normal(jax.random.PRNGKey(7), (16, OBS_DIM), dtype=jnp.float32)
+_f_rx = jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(_rx, _W1.T) + _B1), _W2.T) + _B2), _W3.T) + _B3)
+_rx_m = _mm_fp32(_rx, M_OBS_JAX.T)
+_f_rxm = jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(_rx_m, _W1.T) + _B1), _W2.T) + _B2), _W3.T) + _B3)
+_sym_err = float(jnp.max(jnp.abs(_mm_fp32(_f_rx, M_ACT_JAX.T) - _f_rxm)))
 _st_obs = OBS_STAND_EQ.at[9].set(0.6).at[10].set(0.8)
-_st_err = float(jnp.max(jnp.abs(jnp.tanh(jnp.tanh(jnp.tanh(_st_obs @ _W1.T + _B1) @ _W2.T + _B2) @ _W3.T + _B3))))
+_st_err = float(jnp.max(jnp.abs(jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(jnp.tanh(_mm_fp32(_st_obs, _W1.T) + _B1), _W2.T) + _B2), _W3.T) + _B3))))
 _n_crt_p = sum(x.size for x in jax.tree_util.tree_leaves(_test_p["critic"]))
 _n_rma_t = sum(x.size for x in jax.tree_util.tree_leaves(_test_p["rma_teacher"]))
 _n_rma_s = sum(x.size for x in jax.tree_util.tree_leaves(_test_st))
-print(f"[ARCH AUDIT] Deployable Hardware Actor: 36->64->64->12 (29.3 KB Flash) | "
+print(f"[ARCH AUDIT] Deployable Hardware Actor: 36->64->64->12 (29.3 KB Flash, IEEE-754 FP32) | "
       f"Privileged Critic ({_CRITIC_GEMM_DTYPE}): {_n_crt_p:,} params | "
       f"RMA Teacher: {_n_rma_t:,} -> Student 1D-TCN: {_n_rma_s:,} params")
 print(f"[INVARIANCE] Bilateral Mirror Symmetry Error: {_sym_err:.2e} | Quiet-Stand Drift Output: {_st_err:.2e}")
