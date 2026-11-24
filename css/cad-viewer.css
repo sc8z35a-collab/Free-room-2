@@ -409,3 +409,43 @@ html, body {
   background: #e7f6ec;
   color: #0f6b35;
 }
+
+.fail-tag {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #fdecec;
+  color: #a61c1c;
+}
+
+#policy-summary-container .spec-table th {
+  white-space: nowrap;
+  width: 118px;
+}
+
+.spec-video-wrap {
+  margin-top: 12px;
+  padding: 8px;
+  border-radius: 12px;
+  background: #f8f9fb;
+  border: 1px solid rgba(17, 20, 24, 0.08);
+}
+
+.spec-video {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  background: #14181f;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+}
+
+.spec-video-caption {
+  margin: 7px 2px 0;
+  font-size: 11px;
+  color: #525d6d;
+  line-height: 1.45;
+}
+

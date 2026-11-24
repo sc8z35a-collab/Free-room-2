@@ -579,6 +579,33 @@ function populateExplanationDrawer() {
   const data = window.RNV1_DATA;
   if (!data) return;
 
+  const policyEl = document.getElementById('policy-summary-container');
+  if (policyEl && data.policy) {
+    const p = data.policy;
+    const rs = (data.replay && data.replay.summary) ? data.replay.summary : null;
+    const replayMetric = rs
+      ? `${rs.dist_x_m.toFixed(3)} m / 10s（最大傾き ${rs.max_tilt_deg.toFixed(1)}°・RMSトルク ${rs.rms_torque_nm.toFixed(4)} N·m・${rs.fell ? '転倒あり' : '無転倒'}）`
+      : 'MuJoCo 実物理リプレイ同期済';
+    policyEl.innerHTML = `
+      <table class="spec-table">
+        <tbody>
+          <tr><th>学習ソース</th><td>${p.training_origin}</td></tr>
+          <tr><th>ネットワーク構成</th><td><code>${p.architecture}</code>（${p.control_hz} Hz・残差スケール ${p.residual_scale}）</td></tr>
+          <tr><th>パラメータ / Flash</th><td>${p.total_params.toLocaleString()} params（MLP有効密度 ${p.mlp_density_pct}% / ${(p.flash_bytes / 1024).toFixed(1)} KiB（${p.flash_bytes.toLocaleString()} B）・${p.macs_per_step.toLocaleString()} MACs）</td></tr>
+          <tr><th>組込CPG周期</th><td>${p.cpg_freq_hz} Hz（roll ${p.cpg_roll_amp_rad} rad / stride ${p.cpg_stride_amp_rad} rad）</td></tr>
+          <tr><th>実物理歩行評価</th><td>${replayMetric}</td></tr>
+        </tbody>
+      </table>
+    `;
+  }
+
+  const videoWrap = document.getElementById('policy-video-container');
+  const videoEl = document.getElementById('rnv1-eval-video');
+  if (videoWrap && videoEl && data.policy && data.policy.eval_video_path) {
+    videoEl.src = data.policy.eval_video_path;
+    videoWrap.hidden = false;
+  }
+
   const bomEl = document.getElementById('bom-table-container');
   if (bomEl && data.bom) {
     let rows = data.bom.components.map((c) => `
@@ -611,15 +638,16 @@ function populateExplanationDrawer() {
     const sRows = suites.map((s) => {
       const topMetrics = Object.entries(s.metrics || {}).slice(0, 3)
         .map(([k, v]) => `${k}: ${v}`).join(' / ');
+      const tagClass = s.passed ? 'pass-tag' : 'fail-tag';
       return `
         <tr>
-          <td><span class="pass-tag">${s.passed ? '100% PASS' : 'FAIL'}</span></td>
+          <td><span class="${tagClass}">${s.passed ? '100% PASS' : 'FAIL'}</span></td>
           <td><strong>${s.suite}</strong><br><span>${topMetrics}</span></td>
         </tr>
       `;
     }).join('');
     simEl.innerHTML = `
-      <p>全 <strong>${data.verification.passed_suites} / ${data.verification.total_suites}</strong> 検証スイート合格（MuJoCo 4.0.1 / PyBullet 3.2.7 / OpenSCAD+Trimesh / SciPy FEA・回路・熱 / g++ C++ビット完全一致）。</p>
+      <p>全 <strong>${data.verification.passed_suites} / ${data.verification.total_suites}</strong> 検証スイート合格（MuJoCo / PyBullet / OpenSCAD+Trimesh / SciPy FEA・回路・熱 / g++ C++ビット完全一致）。</p>
       <table class="spec-table"><tbody>${sRows}</tbody></table>
     `;
   }

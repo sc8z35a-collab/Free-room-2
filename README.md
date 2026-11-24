@@ -34,13 +34,15 @@
 
 ---
 
-## Google Colab Pro A100 ワンクリック極限強化学習（学習バージョン: `RNV1`）
+## Google Colab Pro A100 強化学習（学習バージョン: `RNV1` — 学習済モデル組込済）
 
-[`training/RNV1_Colab_A100_Training.ipynb`](training/RNV1_Colab_A100_Training.ipynb) をGoogle Colab Proで開き、以下を実行するだけです。
+[`training/RNV1_Colab_A100_Training.ipynb`](training/RNV1_Colab_A100_Training.ipynb) を Google Colab Pro（NVIDIA A100 GPU）で実行して出力された **`RNV1_Trained_Bundle.zip`** を、本リポジトリへ組み込み・Web 3D CADビューアへ反映済みです。
 
-1. **「ランタイム」→「ランタイムのタイプを変更」→ `A100 GPU`** を選択
-2. **「ランタイム」→「すべてのセルを実行 (Run All)」** をクリック
-3. **MuJoCo MJX（4,096並列GPU環境）** でゼロから **1.2億ステップ（120M steps）** の非対称Actor-Critic PPO強化学習（質量・摩擦・サーボ遅延・外乱衝撃ドメインランダマイゼーション込み）を実行し、歩行評価動画とESP32-S3へそのまま配置できる `rnv1_policy_weights.h`（`RNV1_Trained_Bundle.zip`）を自動ダウンロードします。
+- **ESP32-S3 ファームウェア重み**: [`firmware/include/rnv1_policy_weights.h`](firmware/include/rnv1_policy_weights.h)（`36→64→64→12` 全結合MLP 100%高密度学習済・7,320 float32 = **29.28 KB Flash**・`g++ -Wall -Wextra -Werror` 警告ゼロ）
+- **MuJoCo 評価・物理リプレイ**: [`simulation/rnv1_policy_weights.json`](simulation/rnv1_policy_weights.json) から [`simulation/export_replay_from_weights.py`](simulation/export_replay_from_weights.py) で実物理歩行リプレイ（[`simulation/rnv1_gait_replay.json`](simulation/rnv1_gait_replay.json)）を再生成し、Web 3D CADビューア（[`index.html`](index.html) / [`js/rnv1-data.js`](js/rnv1-data.js)）に反映
+- **Colab 評価動画**: [`simulation/RNV1_walk_eval.mp4`](simulation/RNV1_walk_eval.mp4)（Web ビューア右上の `i` ドロワー内から直接再生可能）
+
+再学習したい場合も、[`training/RNV1_Colab_A100_Training.ipynb`](training/RNV1_Colab_A100_Training.ipynb) を Colab Pro（`A100 GPU`）で開き「すべてのセルを実行 (Run All)」するだけで、MuJoCo MJX（4,096並列GPU環境・Pure-JAX）による 1.2億ステップ強化学習と `RNV1_Trained_Bundle.zip` の再生成が可能です。
 
 ---
 
@@ -64,21 +66,22 @@
 
 ---
 
-## 超厳格 12項目 工学・物理・現実シミュレーション検証結果（12/12 = 100% PASS）
+## 超厳格 12項目 工学・物理・現実シミュレーション検証結果（A100学習済 `RNV1` モデル）
 
-全12スイートを [`simulation/verify_all_12_suites.py`](simulation/verify_all_12_suites.py) により自動実行・定量検証済みです（レポート: [`simulation/reports/verification_report.json`](simulation/reports/verification_report.json)）。
+全12スイートを [`simulation/verify_all_12_suites.py`](simulation/verify_all_12_suites.py) により自動実行・定量検証済みです（レポート: [`simulation/reports/verification_report.json`](simulation/reports/verification_report.json)）。  
+A100 強化学習済みモデルでは、平地10秒歩行距離が **0.622 m → 0.912 m（+46.5%）**、最大傾きが **14.8° → 6.3°**、30環境DR生存率 **100.0%**（5秒平均 0.463 m）、連続歩行稼働時間が **27.8分 → 29.3分** へ大幅に向上しました。一方、未学習タスク（5°上り坂・静止直立バイアス・左旋回・PyBulletゼロショット転移）の厳格基準が今後の追加学習項目として可視化されています（10/12 PASS）。
 
 | # | 検証スイート | 使用ツール | 判定 | 主な実測検証値 |
 |---:|---|---|:-:|---|
 | 1 | 3D CAD印刷性・多様体・クリアランス | OpenSCAD + Trimesh + Manifold3D | **PASS** | 全12 STL 100% Watertight、200 mmベッド収容、印刷質量 154.07 g、足間 6.0 mm、腕間 2.96 mm |
 | 2 | 順運動学・重心・転倒余裕・視野角 | MuJoCo 4.0.1 | **PASS** | 重心高比 0.469（111.6 mm / 238 mm）、前方15.5°/後方13.1°/側方23.7°、遊脚高 14.31 mm、頭部150°×65° |
 | 3 | 構造応力・Z層間接着・座屈・たわみFEA | SciPy 梁・殻・座屈解析 | **PASS** | 3G着地衝撃(12.7 N)+最大ストール時、弱軸Z層間最小安全率 **5.64×**、オイラー座屈 **1,774×**、最大たわみ 0.078 mm |
-| 4 | MuJoCo全身物理・衝撃・登坂・30環境DR | MuJoCo 4.0.1（500 Hz / 25 ms遅延） | **PASS** | 10秒歩行 0.622 m（最大傾き14.8°、RMS 0.053 N·m）、左+1.46 rad/右-0.72 rad旋回、静止0.04°、横1.6 N＆前後1.8 N衝撃耐性、**5°上り坂6秒 0.246 m踏破**、**30環境モンテカルロDR生存率 100.0%** |
-| 5 | 独立別物理エンジン交差検証 | PyBullet 3.2.7（URDF / 1 kHz LCP） | **PASS** | MuJoCo学習済ポリシーのゼロショット転移で静止0.16°、6秒歩行 **0.548 m**・最大傾き 11.5°・無転倒 |
-| 6 | 電源過渡電圧降下・ブラウンアウト・稼働時間 | SciPy 非線形回路ODE | **PASS** | 平均消費電力 11.52 W、連続歩行 **27.8分**、残量30%＋4軸ロック＋発話ピーク時 XIAO入力 **4.63 V**（余裕+0.98 V） |
-| 7 | 30分連続稼働・熱平衡ネットワーク | SciPy 連成熱回路ODE（30℃環境） | **PASS** | XIAO 53.2℃（定格65℃以下）、MG90S 50.2℃、DCDC 62.9℃、電池 42.0℃、筐体 48.1℃ |
+| 4 | MuJoCo全身物理・衝撃・登坂・30環境DR | MuJoCo 4.0.1（500 Hz / 25 ms遅延） | **10秒歩行・衝撃・DR合格** (詳細) | 10秒歩行 **0.912 m（最大傾き 6.3°、RMS 0.0489 N·m）**、横1.6 N＆前後1.8 N衝撃耐性、**30環境モンテカルロDR生存率 100.0%（5秒平均 0.463 m）**（※未学習の5°登坂・左旋回・静止11.9°は要追加学習） |
+| 5 | 独立別物理エンジン交差検証 | PyBullet 3.2.7（URDF / 1 kHz LCP） | **要調整** | 平地歩行 0.264 m到達後に転倒・静止時転倒（MJX専用バイアスによるゼロショット転移課題） |
+| 6 | 電源過渡電圧降下・ブラウンアウト・稼働時間 | SciPy 非線形回路ODE | **PASS** | 平均消費電力 **10.90 W**、連続歩行 **29.3分**、残量30%＋4軸ロック＋発話ピーク時 XIAO入力 **4.63 V**（余裕+0.98 V） |
+| 7 | 30分連続稼働・熱平衡ネットワーク | SciPy 連成熱回路ODE（30℃環境） | **PASS** | XIAO 53.2℃（定格65℃以下）、MG90S **48.8℃**、DCDC **61.2℃**、電池 **41.0℃**、筐体 **47.1℃** |
 | 8 | 2軸ToF空間認識ナビゲーション＆落下防止 | レイキャスト障害物空間シミュレータ | **PASS** | 5障害物室内2.55 mゴール到達、**衝突 0回**、最小障害物余裕 15.3 cm、机段差ドロップオフ100%検知停止 |
-| 9 | C++ファームウェア厳格コンパイル＆ビット一致 | `g++ -O3 -Wall -Wextra -Werror` | **PASS** | 警告0件、Python-C++推論最大誤差 **1.6×10⁻⁷ rad**、29.3 KB Flash、ESP32-S3推論 **0.807 ms**、GPIO衝突0件 |
+| 9 | C++ファームウェア厳格コンパイル＆ビット一致 | `g++ -O3 -Wall -Wextra -Werror` | **PASS** | 警告0件、Python-C++推論最大誤差 **1.36×10⁻⁶ rad**、29.3 KB Flash、ESP32-S3推論 **0.807 ms**、GPIO衝突0件 |
 | 10 | 音声SPL・I2S DMA・PDMマイクSNR | 音響・DMAバッファ解析 | **PASS** | 1 m音圧 78.0 dB SPL、I2S DMA耐ジッタ 96.0 ms、サーボ雑音比 SNR +18.0 dB |
 | 11 | 1万円以内BOM＆モデル間質量完全同期 | JSON/MJCF/URDF自動監査 | **PASS** | 国内 ¥9,874 / 最適 ¥8,340（≤ ¥10,000）、MuJoCo-URDF質量差 **0.0000%** |
 | 12 | Colab A100ノートブック＆Web 3D CAD監査 | nbformat/AST + Node + DOM検証 | **PASS** | `RNV1` A100 MJXノートブック構文正常、背景`#FFFFFF`、説明欄外文字数0、スマホ横全画面＆PC対応 |
@@ -91,7 +94,7 @@
 ├── index.html                           # 純白・文字ゼロ3D CADビューア（スマホ横全画面＆PC対応）
 ├── css/cad-viewer.css                   # レスポンシブスタイルシート
 ├── js/cad-viewer.js                     # Three.js STLローダ・内部部品CAD・MuJoCoモーション再生
-├── js/rnv1-data.js                      # 検証済BOM・歩行リプレイ・12スイート結果バンドル
+├── js/rnv1-data.js                      # A100学習済ポリシー情報・BOM・歩行リプレイ・検証結果バンドル
 ├── vendor/three/                        # ローカルバンドル済み Three.js r170
 ├── cad/
 │   ├── rnv1_params.scad                 # 全寸法単一マスター定義
@@ -105,7 +108,7 @@
 │   ├── platformio.ini                   # PlatformIO（XIAO ESP32S3 Sense）設定
 │   ├── include/rnv1_config.h            # ゼロ衝突GPIO/I2Cピン定義
 │   ├── include/rnv1_policy.h            # 50Hz NN推論・IMU・空間回避・日本語フォルマント音声合成
-│   ├── include/rnv1_policy_weights.h    # 学習済RNV1重みヘッダ（Colab出力でそのまま置換可能）
+│   ├── include/rnv1_policy_weights.h    # A100学習済RNV1重みヘッダ（RNV1_Trained_Bundle.zip組込済）
 │   ├── src/main.cpp                     # デュアルコアFreeRTOSメインファームウェア
 │   └── test/host_verify.cpp             # ネイティブC++ビット一致テスト
 ├── bom/
@@ -115,16 +118,25 @@
     ├── build_physics_models.py          # CAD同期 MuJoCo XML / PyBullet URDF ジェネレータ
     ├── rnv1_humanoid.xml / .urdf        # 同期済物理モデル
     ├── rnv1_policy_core.py              # Python/C++/MJX共通RNV1ポリシーコア
+    ├── rnv1_policy_weights.json         # A100学習済RNV1重みJSON
+    ├── RNV1_walk_eval.mp4               # Colab A100 MuJoCo歩行評価動画
+    ├── export_replay_from_weights.py    # 学習済重みからWeb用MuJoCo歩行リプレイを生成
     ├── train_rnv1_local.py              # ローカルMuJoCo多課題学習・リプレイ出力
     ├── verify_all_12_suites.py          # 12項目超厳格自動検証ハーネス
     ├── build_web_data.py                # Web 3D CADデータバンドラ
-    └── reports/verification_report.json # 12/12合格レポート
+    └── reports/verification_report.json # 12項目検証レポート
 ```
 
 ### ローカル再現コマンド
 ```bash
+# 学習済重みからWeb用MuJoCo歩行リプレイを再生成
+python3 simulation/export_replay_from_weights.py
+
 # 全12項目シミュレーション・工学検証の実行
 python3 simulation/verify_all_12_suites.py
+
+# Web 3D CADデータバンドルの再生成
+python3 simulation/build_web_data.py
 
 # XIAO ESP32S3 Sense へのファームウェア書き込み（PlatformIO）
 pio run -d firmware -t upload

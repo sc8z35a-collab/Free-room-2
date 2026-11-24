@@ -128,10 +128,15 @@
       </section>
 
       <section class="spec-section">
-        <h2>Google Colab Pro A100 極限強化学習 (学習バージョン: RNV1)</h2>
+        <h2>A100 強化学習済 RNV1 ニューラル方策（組込済）</h2>
         <p>
-          リポジトリ内の <code>training/RNV1_Colab_A100_Training.ipynb</code> をGoogle Colab Pro（A100 GPU）で開き、<strong>「ランタイム → すべてのセルを実行」</strong>を押すだけで、MuJoCo MJX（4,096並列GPU物理環境）によりゼロから <strong>1.2億ステップ (120M steps)</strong> の非対称Actor-Critic PPO強化学習（質量・摩擦・サーボ遅延・外乱衝撃ドメインランダマイゼーション込み）を約12〜18分で完走し、ESP32-S3へそのまま書き込める <code>rnv1_policy_weights.h</code>（36→64→64→12、29.2 KB、50 Hz推論 &lt; 0.85 ms）を自動生成・ダウンロードします。
+          Google Colab Pro（NVIDIA A100 GPU）＋ <strong>MuJoCo MJX（Pure-JAX 4,096並列環境）</strong>で学習完了した <code>RNV1_Trained_Bundle.zip</code> をファームウェア（<code>firmware/include/rnv1_policy_weights.h</code>）および物理シミュレーション（<code>simulation/rnv1_policy_weights.json</code>）へ組み込み済みです。本3D CADビューアの歩行モーションも、この学習済ニューラル方策によるMuJoCo実物理リプレイを再生しています。
         </p>
+        <div id="policy-summary-container"></div>
+        <div id="policy-video-container" class="spec-video-wrap" hidden>
+          <video id="rnv1-eval-video" class="spec-video" controls loop muted playsinline preload="metadata"></video>
+          <p class="spec-video-caption">Colab Pro A100 学習直後の MuJoCo 物理歩行評価動画（<code>RNV1_walk_eval.mp4</code>・5.0秒）</p>
+        </div>
       </section>
 
       <section class="spec-section">
@@ -147,7 +152,7 @@
       <section class="spec-section">
         <h2>操作ガイド（アイコン説明）</h2>
         <ul class="spec-list">
-          <li><strong>▶ / ⏸:</strong> MuJoCo 4.0.1 実物理シミュレーションで記録した RNV1 自律歩行モーションの再生・一時停止</li>
+          <li><strong>▶ / ⏸:</strong> A100学習済 RNV1 ニューラル方策の MuJoCo 実物理歩行モーション再生・一時停止</li>
           <li><strong>積層アイコン:</strong> X線透過モード（内部のXIAO ESP32S3・10×MG90S・2×SG90・PCA9685・MPU-6050・VL53L0X・MAX98357A・28mmスピーカー・14500×2電池を透視）</li>
           <li><strong>グリッド四角アイコン:</strong> CAD精密エッジライン表示切替</li>
           <li><strong>電波扇形アイコン:</strong> 2軸アクティブVL53L0Xレーザー空間スキャン＆カメラ視野錐台表示</li>
